@@ -1,0 +1,27 @@
+# 1688 商品图片抓取配置
+# 页面结构变更时修改此文件即可，无需改动 Python 代码
+
+request:
+  headers:
+    Referer: "https://www.1688.com/"
+    User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+
+download:
+  allowed_exts: [".jpg", ".jpeg", ".png", ".webp", ".gif"]
+  min_bytes: 1000
+  timeout: 15
+  scroll_timeout: 10
+
+selectors:
+  v2:
+    main_image: "css:img.ant-image-img.preview-img"
+    sku_image: "css:#skuSelection img.ant-image-img"
+    sku_label: "css:span.item-label"
+    sku_label_level: 2
+    detail_image: "css:#detail img"
+  v1:
+    main_image: "css:div.detail-gallery-turn-outter-wrapper img.detail-gallery-img"
+    sku_image: "css:div.sku-module-wrapper div.sku-item-wrapper div.sku-item-image"
+    sku_label: "css:div.sku-item-name"
+    sku_label_level: 1
+    detail_image: "css:div.content-detail img.desc-img-loaded"
