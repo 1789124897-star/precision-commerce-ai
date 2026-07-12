@@ -1,14 +1,9 @@
 """TTS 配音 Celery 任务 — 从 video.py 同步调用收敛为异步管道"""
-import asyncio
 
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
 from app.repositories.task_repo import TaskRepo
 from app.services.tts_service import TTSEngine
-
-
-def _sync_synthesize(**kwargs) -> dict:
-    return asyncio.run(TTSEngine.synthesize_from_script(**kwargs))
 
 
 @celery_app.task(
@@ -30,7 +25,7 @@ def tts_gen_task(self, task_id: str):
             db.commit()
 
     try:
-        result = _sync_synthesize(**task.request_json)
+        result = TTSEngine().run_sync(**task.request_json)
     except Exception as e:
         with SyncSession() as db:
             task = TaskRepo.get_by_id(db, task_id)

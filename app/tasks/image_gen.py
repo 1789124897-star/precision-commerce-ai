@@ -1,7 +1,7 @@
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
 from app.repositories.task_repo import TaskRepo
-from app.services.image_gen import run_image_generation_sync
+from app.services.image_gen import ImageGenService
 
 
 @celery_app.task(
@@ -23,7 +23,7 @@ def image_gen_task(self, task_id: str):
             db.commit()
 
     try:
-        result = run_image_generation_sync(**task.request_json)
+        result = ImageGenService().run_sync(**task.request_json)
     except Exception as e:
         with SyncSession() as db:
             task = TaskRepo.get_by_id(db, task_id)

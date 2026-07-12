@@ -1,4 +1,5 @@
 ﻿"""口播脚本生成 — DeepSeek JSON 模式 + 段数强制对齐"""
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -44,6 +45,10 @@ class ScriptGenerator:
         # 保存脚本文件
         script_path = self._save(task_id="script", result=result)
         return {"script": result, "script_path": script_path}
+
+    def run_sync(self, **kwargs) -> dict:
+        """同步包装，供 Celery 任务调用"""
+        return asyncio.run(self.generate(**kwargs))
 
     # ── 结果构建 ──
 

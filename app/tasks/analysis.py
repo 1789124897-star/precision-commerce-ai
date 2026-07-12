@@ -2,7 +2,7 @@ from app.core.celery_app import celery_app
 from app.core.database import SyncSession
 from app.models import Analysis
 from app.repositories.task_repo import TaskRepo
-from app.services.analysis import run_analysis_sync
+from app.services.analysis import AnalysisService
 
 
 @celery_app.task(
@@ -24,7 +24,7 @@ def analyze_product_task(self, task_id: str):
             db.commit()
 
     try:
-        result = run_analysis_sync(**task.request_json)
+        result = AnalysisService().run_sync(**task.request_json)
     except Exception as e:
         with SyncSession() as db:
             task = TaskRepo.get_by_id(db, task_id)
