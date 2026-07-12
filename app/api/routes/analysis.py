@@ -52,7 +52,9 @@ async def submit_analysis(
 
 @router.post("/strategies")
 async def do_submit_strategies(body: StrategyRequest, db: AsyncSession = Depends(get_db)) -> dict:
+
     task_id = uuid.uuid4().hex[:8]
+    
     task = Task(
         task_id=task_id,
         parent_task_id=body.parent_task_id,

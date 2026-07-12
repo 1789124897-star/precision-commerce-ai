@@ -15,7 +15,7 @@ from DrissionPage import ChromiumOptions, ChromiumPage
 from app.core.config import settings
 from app.core.paths import IMAGE_DIR as OUTPUT_ROOT, SCRAPER_CONFIG
 
-logger = logging.getLogger("precision.scraper")
+logger = logging.getLogger(__name__)
 
 with open(SCRAPER_CONFIG, "r", encoding="utf-8") as f:
     SCRAPER_CFG = yaml.safe_load(f)

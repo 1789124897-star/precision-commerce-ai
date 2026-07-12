@@ -1,11 +1,9 @@
 ﻿"""TTS 语音合成 — edge-tts 逐字时间戳 + SRT 字幕生成"""
 
-import os
-os.environ["NO_PROXY"] = "speech.platform.bing.com,*.bing.com"
-os.environ["no_proxy"] = "speech.platform.bing.com,*.bing.com"
 import asyncio
 import json
 import logging
+import os
 import uuid
 from pathlib import Path
 
@@ -23,10 +21,15 @@ DEFAULT_RATE = "+0%"
 class TTSEngine:
     """edge-tts 语音合成引擎，全量脚本合成 + 逐字时间戳 SRT。"""
 
+    def __init__(self):
+        # 绕过系统代理，确保 edge-tts 直连微软 TTS 服务
+        os.environ.setdefault("NO_PROXY", "speech.platform.bing.com,*.bing.com")
+        os.environ.setdefault("no_proxy", "speech.platform.bing.com,*.bing.com")
+
     # ── 全量合成 ──
 
-    @staticmethod
     async def synthesize_from_script(
+        self,
         script_path: str = "",
         text: str = "",
         voice: str = "",
@@ -79,6 +82,10 @@ class TTSEngine:
             "srt_path": "/" + str(srt_path).replace("\\", "/"),
             "duration_sec": round(duration, 1),
         }
+
+    def run_sync(self, **kwargs) -> dict:
+        """同步包装，供 Celery 任务调用"""
+        return asyncio.run(self.synthesize_from_script(**kwargs))
 
 
 # ── 内部工具 ──

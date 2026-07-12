@@ -23,6 +23,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from proglog import ProgressBarLogger
 
 from app.core.paths import OUTPUT_DIR, VIDEO_DIR
+from app.services.seedance_service import SeedanceService
 
 logger = logging.getLogger(__name__)
 
@@ -498,8 +499,6 @@ class VideoComposer:
         speed = total_design_dur / total_duration if total_duration > 0 else 1.0
         logger.info(f"精铺: {total_shots} 镜, 设计时长 {total_design_dur:.1f}s, 音频 {total_duration:.1f}s, 速率 {speed:.2f}")
 
-        from app.services import seedance_service as sd
-
         clips: list = []
         time_elapsed = 0.0
         for i, shot in enumerate(shots):
@@ -534,7 +533,7 @@ class VideoComposer:
             if first_frame_url and first_frame_url.startswith("http") and last_frame_url and last_frame_url.startswith("http"):
                 # 首尾帧视频生成
                 try:
-                    seedance_path = asyncio.run(sd.generate_clip_first_last_frame(
+                    seedance_path = asyncio.run(SeedanceService().generate_clip_first_last_frame(
                         first_frame_url=first_frame_url,
                         last_frame_url=last_frame_url,
                         prompt=scene_prompt or "smooth transition, professional product showcase",
@@ -551,7 +550,7 @@ class VideoComposer:
                     logger.warning(f"镜{i+1} Seedance 首尾帧失败: {e}")
             elif image_url and image_url.startswith("http"):
                 try:
-                    seedance_path = asyncio.run(sd.generate_clip_from_url(
+                    seedance_path = asyncio.run(SeedanceService().generate_clip_from_url(
                         image_url=image_url,
                         prompt=scene_prompt or "product showcase, professional lighting",
                         aspect_ratio=aspect_ratio,
@@ -568,7 +567,7 @@ class VideoComposer:
             elif scene_prompt:
                 # 纯文生视频：无参考图，仅凭场景描述生成
                 try:
-                    seedance_path = asyncio.run(sd.generate_clip_text_only(
+                    seedance_path = asyncio.run(SeedanceService().generate_clip_text_only(
                         prompt=scene_prompt,
                         aspect_ratio=aspect_ratio,
                         duration_sec=dur,

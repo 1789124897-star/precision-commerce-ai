@@ -16,6 +16,51 @@ from app.services.ai_client import AIClient
 logger = logging.getLogger(__name__)
 
 
+class ImageGenService:
+    """AI 生图服务"""
+
+    def __init__(self):
+        self.ai = AIClient()
+
+    async def run(
+        self,
+        images_data: str = "",
+        ref_image_paths: Optional[list[str]] = None,
+        size: str = "2048x2048",
+        task_id: str = "",
+    ) -> dict:
+        if not settings.SEEDREAM_IMAGE_URL or not settings.SEEDREAM_IMAGE_MODEL:
+            raise ValueError("未配置图片生成 API，请在 .env 中设置 SEEDREAM_IMAGE_URL 和 SEEDREAM_IMAGE_MODEL")
+
+        ref_data_urls = [image_to_data_url(url) for url in ref_image_paths] if ref_image_paths else []
+
+        output_dir = IMAGE_DIR / task_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        specs = json.loads(images_data)
+        results = await self.ai.generate_images(
+            specs=specs,
+            ref_image_data_urls=ref_data_urls,
+            size=size,
+        )
+        all_images = await _build_image_entries(results, "", output_dir, task_id, timestamp)
+
+        success_count = sum(1 for r in results if r.get("url"))
+        if success_count == 0:
+            raise RuntimeError(f"全部 {len(results)} 张图片生成失败")
+
+        return {
+            "images": all_images,
+            "output_dir": str(output_dir),
+        }
+
+    def run_sync(self, **kwargs: Any) -> dict:
+        """同步包装，供 Celery 任务调用"""
+        return asyncio.run(self.run(**kwargs))
+
+
 async def _download_image(url: str, output_dir: Path, filename: str) -> Path:
     """下载图片到本地，返回保存路径"""
     filepath = output_dir / filename
@@ -24,46 +69,6 @@ async def _download_image(url: str, output_dir: Path, filename: str) -> Path:
         resp.raise_for_status()
         filepath.write_bytes(resp.content)
     return filepath
-
-
-async def run_image_generation(
-    images_data: str = "",
-    ref_image_paths: Optional[list[str]] = None,
-    size: str = "2048x2048",
-    task_id: str = "",
-) -> dict:
-    if not settings.SEEDREAM_IMAGE_URL or not settings.SEEDREAM_IMAGE_MODEL:
-        raise ValueError("未配置图片生成 API，请在 .env 中设置 SEEDREAM_IMAGE_URL 和 SEEDREAM_IMAGE_MODEL")
-
-    ref_data_urls = [image_to_data_url(url) for url in ref_image_paths] if ref_image_paths else []
-
-    output_dir = IMAGE_DIR / task_id
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    client = AIClient()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    specs = json.loads(images_data)
-    results = await client.generate_images(
-        specs=specs,
-        ref_image_data_urls=ref_data_urls,
-        size=size,
-    )
-    all_images = await _build_image_entries(results, "", output_dir, task_id, timestamp)
-
-    success_count = sum(1 for r in results if r.get("url"))
-    if success_count == 0:
-        raise RuntimeError(f"全部 {len(results)} 张图片生成失败")
-
-    return {
-        "images": all_images,
-        "output_dir": str(output_dir),
-    }
-
-
-def run_image_generation_sync(**kwargs: Any) -> dict:
-    """同步包装，供 Celery 任务调用"""
-    return asyncio.run(run_image_generation(**kwargs))
 
 
 async def _build_image_entries(

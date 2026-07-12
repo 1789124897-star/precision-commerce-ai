@@ -1,11 +1,10 @@
-import asyncio
 import logging
 
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
 from app.models import Video
 from app.repositories.task_repo import TaskRepo
-from app.services import seedance_service as sd
+from app.services.seedance_service import SeedanceService
 from app.services.video_composer import composer
 
 logger = logging.getLogger(__name__)
@@ -177,7 +176,7 @@ def generate_shot_task(self, task_id: str):
             logger.exception("写入分镜进度失败")
 
     try:
-        clip_path = asyncio.run(sd.generate_shot(
+        clip_path = SeedanceService().generate_shot_sync(
             image_url=req.get("image_url", ""),
             first_frame_url=req.get("first_frame_url", ""),
             last_frame_url=req.get("last_frame_url", ""),
@@ -188,7 +187,7 @@ def generate_shot_task(self, task_id: str):
             on_progress=shot_progress,
             generate_audio=req.get("generate_audio", False),
             resolution=req.get("resolution", "720p"),
-        ))
+        )
         video_path = "/" + str(clip_path).replace("\\", "/")
     except Exception as e:
         with SyncSession() as db:
