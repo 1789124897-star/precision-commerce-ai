@@ -5,3 +5,7 @@ output/
 *.log
 .idea/
 .vscode/
+venv/
+.venv/
+.qoder/
+logs/
