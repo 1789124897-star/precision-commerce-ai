@@ -1,29 +1,29 @@
-﻿# 精铺 AI 工作台 (Precision Commerce AI)
+﻿# AI 任务工作台 — 多队列异步任务管线实践
 
-> 面向电商选品运营的全链路 AI 工具，解决"选品分析 → 差异化策略 → 营销素材生成"的手工低效问题。
+> 基于 FastAPI + Celery 的全链路异步任务平台，覆盖数据采集、AI 分析、内容生成、多媒体合成等场景。
 
 ## 功能链路
 
 ```
-1688 采集 ──▶ 深度分析 ──▶ 差异化策略 ──▶ AI 生图
-                (多模态 LLM)     (三套策略)      (Seedream 4.5)
+数据采集 ──▶ 深度分析 ──▶ 策略生成 ──▶ AI 生图
+            (多模态 LLM)  (三路并发)    (Seedream 4.5)
 
-商品文案 ──▶ 口播脚本 ──▶ TTS 配音 ──▶ 视频合成
-              (透传模式)    (edge-tts)     (MoviePy / Seedance)
+文本输入 ──▶ 脚本生成 ──▶ TTS 合成 ──▶ 视频合成
+            (透传模式)    (edge-tts)   (MoviePy / Seedance)
 ```
 
 ### 各模块详解
 
-| 模块 | 路由 | 技术实现 |
+| 模块 | 路由 | 功能说明 |
 |------|------|---------|
-| **1688 采集** | `POST /scraper/scrape` | DrissionPage 浏览器自动化，DOM 自适应抓取 + 系统代理绕过 |
-| **深度分析** | `POST /analysis/submit` | DeepSeek 多模态（商品文本 + 图片 data URL），结构化输出 |
-| **差异化策略** | `POST /analysis/strategies` | 三策略异步并发（痛点解决/效率功能/情绪品质），独立入库 |
-| **AI 生图** | `POST /images/generate` | 策略驱动 prompt 注入，Seedream 4.5 API，支持参考图 |
-| **口播脚本** | `POST /video/generate-script` | LLM JSON mode，声明式 prompt 约束段数，无硬编码兜底 |
-| **TTS 配音** | `POST /video/generate-tts` | edge-tts 微软神经语音，逐字时间戳 → 标点切句 SRT |
-| **视频合成** | `POST /video/compose` / `POST /video/compose-premium` | 快速模式：MoviePy Ken Burns + 过渡；精品模式：Seedance AI 生成 + 拼接 |
-| **任务追踪** | `GET /tasks/{task_id}` | 前后端统一轮询 `poll8000`，Celery 异步结果回调 |
+| **数据采集** | `POST /scraper/scrape`                     | 输入 URL，自动提取页面上的图片和文本，存入数据库               |
+| **深度分析** | `POST /analysis/submit`                    | 对采集到的文本和图片做多模态 AI 分析，输出结构化结论           |
+| **策略生成** | `POST /analysis/strategies`                | 基于分析结果，生成多角度的营销策略，三路并发入库               |
+| **AI 生图** | `POST /images/generate`                     | 将策略文案转化为图片生成指令，调用 Seedream 4.5 出图           |
+| **脚本生成** | `POST /video/generate-script`              | 将文本转为口播脚本，LLM 结构化输出，不做代码层修补             |
+| **TTS 合成** | `POST /video/generate-tts`                 | 将脚本文本合成为语音文件，同时输出逐字对齐的字幕文件           |
+| **视频合成** | `POST /video/compose` / `POST /video/compose-premium` | 将图片/视频素材 + 音频 + 字幕合成为成品视频         |
+| **任务追踪** | `GET /tasks/{task_id}`                     | 前端轮询查询异步任务进度，任务完成后自动返回结果               |
 
 ## 架构设计
 
@@ -32,7 +32,7 @@
 ```
 Route 层 ── Pydantic 参数校验，任务创建 + 下发，立即返回 task_id
   │
-Service 层 ── 纯业务逻辑，不碰 HTTP / 数据库
+Service 层 ── 业务逻辑编排，调用外部 AI 接口，与框架层、数据层解耦
   │
 Repository 层 ── 数据访问封装，只暴露必要查询
   │
@@ -41,7 +41,7 @@ Model 层 ── SQLAlchemy 2.0 Mapped，Base.metadata.create_all 自动建表
 
 ### 异步任务管线
 
-所有耗时操作通过 Celery 异步执行，Redis 作为 broker，前端轮询 `GET /tasks/{task_id}` 获取状态。
+所有耗时操作通过 Celery 异步执行，Redis 作为消息代理，任务状态通过 `GET /tasks/{task_id}` 统一查询。
 
 **五队列优先级隔离：**
 
@@ -49,7 +49,7 @@ Model 层 ── SQLAlchemy 2.0 Mapped，Base.metadata.create_all 自动建表
 |------|--------|------|---------|
 | `video` | 9 | 脚本生成、TTS | 流水线关键路径，优先保障 |
 | `ai` | 7 | 分析、策略、生图 | IO 密集（API 调用），高并发安全 |
-| `scraper` | 5 | 1688 爬取 | 浏览器自动化，内存大户 |
+| `scraper` | 5 | 数据采集 | 浏览器自动化，内存大户 |
 | `compose` | 3 | 视频合成 | CPU 密集（MoviePy），压低防饥饿 |
 | `default` | 1 | 僵尸任务清理 | 后台维护，最低优先级 |
 
@@ -62,10 +62,10 @@ Model 层 ── SQLAlchemy 2.0 Mapped，Base.metadata.create_all 自动建表
 
 ### 数据库设计
 
-| 表 | 记录数 | 设计原因 |
+| 表 | 用途 | 设计原因 |
 |---|--------|---------|
 | `tasks` | 所有异步任务 | 统一生命周期追踪，`result_json` 做任务快照 |
-| `products` | 爬取商品 | `product_id` 索引，串联分析 & 视频的关联关系 |
+| `products` | 采集数据 | `product_id` 索引，串联分析 & 视频的关联关系 |
 | `analyses` | 每次分析 1 行 | 输入字段可查询（品类/价格），输出全文存 TEXT |
 | `strategies` | 每次分析 3 行 | A/B/C 独立行，`analysis_task_id` FK 维持血缘 |
 | `videos` | 每次合成 1 行 | 交付物追踪（素材/输出路径/时长/分辨率） |
@@ -93,7 +93,7 @@ Docker Compose · Celery Flower · Celery Beat
 
 ```bash
 cp .env.example .env          # 填入 API Key
-docker-compose up -d          # 一键启动六个服务
+docker-compose up -d          # 一键启动（API + Celery Workers × 4 + MySQL + Redis）
 ```
 
 服务端口：
@@ -105,14 +105,14 @@ docker-compose up -d          # 一键启动六个服务
 
 ```
 app/
-├── api/routes/        thin route, only validate + dispatch
-├── services/          business logic (analysis, images, script, tts, video)
-├── tasks/             Celery task definitions (5-queue routing)
-├── models/            ORM (Task, Product, Analysis, Strategy, Video)
-├── schemas/           Pydantic request/response models
-├── core/              infrastructure (config, db, celery, paths, logging)
-├── repositories/      data access layer
-└── workers/           celery app entry point
-static/                vanilla JS frontend (index.html)
-output/                generated assets (images, audio, videos)
+├── api/routes/        路由层（参数校验 + 任务下发）
+├── services/          业务逻辑（分析/生图/脚本/TTS/视频）
+├── tasks/             Celery 任务定义（五队列路由）
+├── models/            ORM 模型（Task/Product/Analysis/Strategy/Video）
+├── schemas/           Pydantic 请求/响应模型
+├── core/              基础设施（配置/数据库/Celery/路径/日志）
+├── repositories/      数据访问封装
+└── workers/           Celery 应用入口
+static/                前端页面（index.html）
+output/                产物目录（图片/音频/视频）
 ```
