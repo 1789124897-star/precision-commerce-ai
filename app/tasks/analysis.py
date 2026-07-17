@@ -9,6 +9,8 @@ from app.services.analysis import AnalysisService
     bind=True,
     name="analyze_product",
     priority=7,
+    soft_time_limit=300,
+    time_limit=420,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,

@@ -85,7 +85,7 @@ async def upload_srt(file: UploadFile = File(...)) -> dict:
 
 @router.post("/compose")
 async def compose_video(body: ComposeVideoRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    task_id = body.task_id or uuid.uuid4().hex[:8]
+    task_id = uuid.uuid4().hex[:8]
     task = Task(
         task_id=task_id,
         type="video_compose",
@@ -107,7 +107,7 @@ async def compose_video(body: ComposeVideoRequest, db: AsyncSession = Depends(ge
 
 @router.post("/compose-premium")
 async def compose_premium(body: ComposePremiumRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    task_id = body.task_id or uuid.uuid4().hex[:8]
+    task_id = uuid.uuid4().hex[:8]
     task = Task(
         task_id=task_id,
         type="video_compose",

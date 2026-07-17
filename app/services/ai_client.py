@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import time
 from typing import Any, Optional
 
 import httpx
@@ -60,7 +61,7 @@ class AIClient:
             system_content=system_prompt,
             user_content=user_prompt,
             temperature=0.7,
-            max_tokens=4096,
+            max_tokens=2048,
         )
 
     async def _text_chat_to_json(
@@ -105,7 +106,12 @@ class AIClient:
             "max_tokens": max_tokens,
             "response_format": {"type": "json_object"},
         }
-        return await self._post(settings.TEXT_BASE_URL, payload, timeout=120.0, headers=headers)
+        t0 = time.monotonic()
+        logger.info("DeepSeek 请求开始 model=%s max_tokens=%d", settings.TEXT_MODEL, max_tokens)
+        result = await self._post(settings.TEXT_BASE_URL, payload, timeout=120.0, headers=headers)
+        elapsed = time.monotonic() - t0
+        logger.info("DeepSeek 请求完成 耗时=%.1fs", elapsed)
+        return result
 
     async def _post(
         self,

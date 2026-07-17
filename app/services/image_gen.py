@@ -49,7 +49,9 @@ class ImageGenService:
 
         success_count = sum(1 for r in results if r.get("url"))
         if success_count == 0:
-            raise RuntimeError(f"全部 {len(results)} 张图片生成失败")
+            errors = [r.get("error", "?") for r in results]
+            first_error = next((e for e in errors if e != "internal error"), errors[0])
+            raise RuntimeError(f"全部 {len(results)} 张图片生成失败: {errors.count(first_error)}/{len(results)} 张报 {first_error}")
 
         return {
             "images": all_images,

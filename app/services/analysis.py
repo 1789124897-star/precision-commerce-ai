@@ -1,6 +1,7 @@
 ﻿"""产品分析服务"""
 import asyncio
 import logging
+import time
 from typing import Any, Optional
 
 from app.core.utils import image_to_data_url
@@ -47,7 +48,11 @@ class AnalysisService:
         for code, meta in STRATEGY_TYPES.items():
             prompt = build_strategy_prompt(analysis, code, meta["name"], system_prompt)
             coroutines.append(client.generate_strategy(prompt=prompt))
+        t0 = time.monotonic()
+        logger.info("策略生成开始，并发数=%d", len(coroutines))
         results = await asyncio.gather(*coroutines)
+        elapsed = time.monotonic() - t0
+        logger.info("策略生成完成，总耗时=%.1fs，平均=%.1fs/套", elapsed, elapsed / len(coroutines))
         return {"strategies": dict(zip(STRATEGY_TYPES.keys(), results))}
 
     def run_strategies_sync(self, **kwargs: Any) -> dict:
