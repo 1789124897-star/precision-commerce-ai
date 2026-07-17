@@ -49,13 +49,18 @@ class ImageScraper:
             if "404" in (page.title or "") or "错误" in (page.title or ""):
                 raise RuntimeError(f"页面无法访问（{page.title}），请检查链接是否正确")
 
-            is_v2 = bool(page.ele(SCRAPER_CFG["selectors"]["v2"]["main_image"]))
-            logger.info("检测到%s页面", "新版" if is_v2 else "旧版")
+            if page.ele(SCRAPER_CFG["selectors"]["v3"]["main_image"]):
+                version = "v3"
+            elif page.ele(SCRAPER_CFG["selectors"]["v2"]["main_image"]):
+                version = "v2"
+            else:
+                version = "v1"
+            logger.info("检测到%s页面", version.upper())
 
-            self._download_main_images(page, task_dir, is_v2)
+            self._download_main_images(page, task_dir, version)
             self._scroll_to_bottom(page)
-            self._download_sku_images(page, task_dir, is_v2)
-            self._download_detail_images(page, task_dir, is_v2)
+            self._download_sku_images(page, task_dir, version)
+            self._download_detail_images(page, task_dir, version)
         except Exception:
             logger.exception("采集过程中发生未预期错误")
             if not self.images:
@@ -87,12 +92,11 @@ class ImageScraper:
             "images": metadata,
         }
 
-    def _download_main_images(self, page, task_dir: Path, is_v2: bool) -> None:
-        version = "v2" if is_v2 else "v1"
+    def _download_main_images(self, page, task_dir: Path, version: str) -> None:
         cfg = SCRAPER_CFG["selectors"][version]
 
         imgs = page.eles(cfg["main_image"])
-        attrs = ("src",) if is_v2 else ("src", "data-lazyload-src")
+        attrs = ("src", "data-lazyload-src") if version == "v1" else ("src",)
 
         logger.info("发现 %d 张主图", len(imgs))
         seen = set()
@@ -114,8 +118,7 @@ class ImageScraper:
             except Exception:
                 logger.warning("主图_%d 处理异常", idx, exc_info=True)
 
-    def _download_sku_images(self, page, task_dir: Path, is_v2: bool) -> None:
-        version = "v2" if is_v2 else "v1"
+    def _download_sku_images(self, page, task_dir: Path, version: str) -> None:
         cfg = SCRAPER_CFG["selectors"][version]
         nodes = page.eles(cfg["sku_image"])
         logger.info("发现 %d 张 SKU 图", len(nodes))
@@ -126,20 +129,22 @@ class ImageScraper:
                 url = node.attr("src") or self._extract_bg_url(node.attr("style"))
                 if not url or url in seen:
                     continue
+                seen.add(url)
                 url = url.replace("_sum.jpg", "").replace("_sum.webp", "")
 
                 label = ""
                 try:
                     ancestor = node
                     for _ in range(cfg["sku_label_level"]):
-                        ancestor = ancestor.parent
+                        p = ancestor.parent
+                        ancestor = p() if callable(p) else p
                     label_el = ancestor.ele(cfg["sku_label"])
                     if label_el:
                         label = label_el.text.strip()
+                    logger.info("SKU标签提取: level=%s selector=%s label='%s'", cfg["sku_label_level"], cfg["sku_label"], label)
                 except Exception:
-                    pass
+                    logger.warning("SKU标签提取异常", exc_info=True)
 
-                seen.add(url)
                 idx += 1
                 safe_label = re.sub(r'[\\/:*?"<>|]', "_", label) if label else str(idx)
                 filename = f"SKU_{idx}_{safe_label}.jpg"
@@ -151,12 +156,11 @@ class ImageScraper:
             except Exception:
                 logger.warning("SKU_%d 处理异常", idx, exc_info=True)
 
-    def _download_detail_images(self, page, task_dir: Path, is_v2: bool) -> None:
-        version = "v2" if is_v2 else "v1"
+    def _download_detail_images(self, page, task_dir: Path, version: str) -> None:
         cfg = SCRAPER_CFG["selectors"][version]
 
         imgs = page.eles(cfg["detail_image"])
-        attrs = ("src",) if is_v2 else ("src", "data-lazyload-src")
+        attrs = ("src", "data-lazyload-src") if version == "v1" else ("src",)
 
         logger.info("发现 %d 张详情图", len(imgs))
         seen = set()

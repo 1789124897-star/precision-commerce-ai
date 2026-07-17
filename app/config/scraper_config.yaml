@@ -13,15 +13,22 @@ download:
   scroll_timeout: 10
 
 selectors:
-  v2:
-    sku_label_level: 2
-    main_image: "css:img.ant-image-img.preview-img"
-    sku_image: "css:#skuSelection img.ant-image-img"
-    sku_label: "css:span.item-label"
-    detail_image: "css:#detail img"
   v1:    
     sku_label_level: 1
     main_image: "css:div.detail-gallery-turn-outter-wrapper img.detail-gallery-img"
     sku_image: "css:div.sku-module-wrapper div.sku-item-wrapper div.sku-item-image"
     sku_label: "css:div.sku-item-name"
     detail_image: "css:div.content-detail img.desc-img-loaded"
+  v2:
+    sku_label_level: 2
+    main_image: "css:img.ant-image-img.preview-img"
+    sku_image: "css:#skuSelection img.ant-image-img"
+    sku_label: "css:span.item-label"
+    detail_image: "css:#detail img"
+  v3:
+    sku_label_level: 2
+    main_image: "css:div.od-gallery-list-wapper img.ant-image-img.preview-img"
+    sku_image: "css:div.expand-view-item img.ant-image-img"
+    sku_label: "css:span.item-label"
+    detail_image: "css:#detail img"
+

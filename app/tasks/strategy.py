@@ -14,6 +14,8 @@ from app.services.analysis import AnalysisService
     retry_backoff_max=300,
     max_retries=3,
     retry_jitter=True,
+    soft_time_limit=300,
+    time_limit=420,
 )
 def strategy_task(self, task_id: str):
     with SyncSession() as db:

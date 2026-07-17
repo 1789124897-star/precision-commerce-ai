@@ -22,7 +22,7 @@ class ComposeVideoRequest(BaseModel):
     images: list[str]
     audio_path: str
     srt_path: str
-    task_id: str
+    task_id: str = ""
     mode: str = "fast"
     aspect_ratio: str = "9:16"
     quality_check: bool = True
@@ -46,7 +46,7 @@ class ComposePremiumRequest(BaseModel):
     images: list[str]
     audio_path: str
     srt_path: str = ""
-    task_id: str
+    task_id: str = ""
     aspect_ratio: str = "9:16"
     generate_audio: bool = False
     resolution: str = "720p"
