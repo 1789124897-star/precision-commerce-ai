@@ -48,6 +48,7 @@ def _progress_callback(task_id: str):
     retry_jitter=True,
 )
 def compose_video_task(self, task_id: str):
+    logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
         task = TaskRepo.get_by_id(db, task_id)
         if task:
@@ -67,6 +68,7 @@ def compose_video_task(self, task_id: str):
             on_progress=_progress_callback(task_id),
         )
     except Exception as e:
+        logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
             task = TaskRepo.get_by_id(db, task_id)
             if task:
@@ -93,6 +95,7 @@ def compose_video_task(self, task_id: str):
         ))
         db.commit()
 
+    logger.info("完成 task_id=%s", task_id)
     return {"task_id": task_id, "status": "SUCCESS"}
 
 
@@ -109,6 +112,7 @@ def compose_video_task(self, task_id: str):
     retry_jitter=True,
 )
 def compose_premium_task(self, task_id: str):
+    logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
         task = TaskRepo.get_by_id(db, task_id)
         if task:
@@ -129,6 +133,7 @@ def compose_premium_task(self, task_id: str):
             segment_durations=task.request_json.get("segment_durations"),
         )
     except Exception as e:
+        logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
             task = TaskRepo.get_by_id(db, task_id)
             if task:
@@ -156,6 +161,7 @@ def compose_premium_task(self, task_id: str):
         ))
         db.commit()
 
+    logger.info("完成 task_id=%s", task_id)
     return {"task_id": task_id, "status": "SUCCESS"}
 
 
@@ -172,6 +178,7 @@ def compose_premium_task(self, task_id: str):
     retry_jitter=True,
 )
 def generate_shot_task(self, task_id: str):
+    logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
         task = TaskRepo.get_by_id(db, task_id)
         if task:
@@ -206,6 +213,7 @@ def generate_shot_task(self, task_id: str):
         )
         video_path = "/" + str(clip_path).replace("\\", "/")
     except Exception as e:
+        logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
             task = TaskRepo.get_by_id(db, task_id)
             if task:
@@ -225,4 +233,5 @@ def generate_shot_task(self, task_id: str):
             }
         db.commit()
 
+    logger.info("完成 task_id=%s", task_id)
     return {"task_id": task_id, "status": "SUCCESS"}

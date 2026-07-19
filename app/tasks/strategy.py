@@ -1,8 +1,13 @@
+"""营销策略生成 Celery 任务"""
+import logging
+
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
 from app.models import Strategy
 from app.repositories.task_repo import TaskRepo
 from app.services.analysis import AnalysisService
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(
@@ -18,6 +23,7 @@ from app.services.analysis import AnalysisService
     time_limit=420,
 )
 def strategy_task(self, task_id: str):
+    logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
         task = TaskRepo.get_by_id(db, task_id)
         if task:
@@ -28,6 +34,7 @@ def strategy_task(self, task_id: str):
     try:
         result = AnalysisService().run_strategies_sync(**task.request_json)
     except Exception as e:
+        logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
             task = TaskRepo.get_by_id(db, task_id)
             if task:
@@ -51,4 +58,5 @@ def strategy_task(self, task_id: str):
             ))
         db.commit()
 
+    logger.info("完成 task_id=%s", task_id)
     return {"task_id": task_id, "status": "SUCCESS"}

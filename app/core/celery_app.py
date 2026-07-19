@@ -4,6 +4,9 @@ from celery.schedules import crontab
 from kombu import Queue
 
 from app.core.config import settings
+from app.core.logging import setup_logging
+
+setup_logging()  # worker 启动时初始化日志（不依赖 FastAPI main）
 
 celery_app = Celery(
     "precision_commerce",
@@ -37,6 +40,9 @@ celery_app.conf.update(
     # ── 时区 ──
     timezone="Asia/Shanghai",
     enable_utc=False,
+
+    # ── 日志：不劫持 root logger，用我们自己的配置 ──
+    worker_hijack_root_logger=False,
 
     # ── 多队列：按任务类型隔离，防止 CPU 密集任务饿死 IO 密集任务 ──
     task_queues=(
