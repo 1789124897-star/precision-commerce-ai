@@ -935,7 +935,7 @@ function updateFlowHint() {
 // ══════════════════════════════════════════════════════
 async function doScrape() {
   const url = document.getElementById('url1688').value.trim();
-  if (!url) { showS('scrapeStatus', 'error', '请粘贴 1688 商品链接'); return; }
+  if (!url) { showS('scrapeStatus', 'error', '请先粘贴 1688 商品链接'); return; }
   const btn = document.getElementById('btnScrape'); btn.disabled = true;
   document.getElementById('scrapeDone').style.display = 'none';
   showS('scrapeStatus', 'info', '正在提交采集任务...');
@@ -981,10 +981,10 @@ async function doScrape() {
 }
 
 async function openScrapeFolder() {
-  if (!S.scrapedFolder) { alert('请先采集商品'); return; }
+  if (!S.scrapedFolder) { showS('scrapeStatus', 'error', '请先采集商品'); return; }
   try {
     await fetch(`${A8_API}/scraper/open-folder`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({folder: S.scrapedFolder}) });
-  } catch(e) { alert('无法打开文件夹: ' + e.message); }
+  } catch(e) { showS('scrapeStatus', 'error', '无法打开文件夹: ' + e.message); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1026,8 +1026,8 @@ async function doAnalyze() {
   const func = document.getElementById('anaFunc').value.trim();
   const price = document.getElementById('anaPrice').value.trim();
   const extra = document.getElementById('anaExtra').value.trim();
-  if (!name || !func || !price) { showS('anaStatus', 'error', '请填写产品标题、功能和SKU规格'); return; }
-  if (!S.productImageFiles.length) { showS('anaStatus', 'error', '请上传至少一张产品图片'); return; }
+  if (!name || !func || !price) { showS('anaStatus', 'error', '请先填写产品标题、功能和SKU规格'); return; }
+  if (!S.productImageFiles.length) { showS('anaStatus', 'error', '请先上传至少一张产品图片'); return; }
 
   // 回存共享状态
   S.productTitle = name;
@@ -1079,7 +1079,7 @@ function renderAnaReport(md, taskId) {
 
 async function doDiffStrategies() {
   const report = document.getElementById('dsReport').value.trim();
-  if (!report) { showS('dsStatus', 'error', '请粘贴或导入分析报告'); return; }
+  if (!report) { showS('dsStatus', 'error', '请先粘贴或导入分析报告'); return; }
 
   document.getElementById('btnDiffStrategy').disabled = true;
   showS('dsStatus', 'info', '策略生成中（约10-20秒）...');
@@ -1318,7 +1318,7 @@ async function genSelectedImages(key) {
   dpCbs.forEach((cb, i) => { if (cb.checked && s.detail_pages && s.detail_pages[i]) selectedDP.push(s.detail_pages[i]); });
 
   const total = selectedMI.length + selectedDP.length;
-  if (!total) { alert('请至少勾选一张图'); return; }
+  if (!total) { showS('dsStatus', 'error', '请先至少勾选一张图'); return; }
 
   container.innerHTML = `<div style="font-size:13px;color:var(--accent);padding:8px;">正在生成 ${total} 张图...</div>`;
 
@@ -1384,7 +1384,7 @@ async function genSelectedImages(key) {
 function strategyToVideo(key) {
   if (!S.anaStrategies) { showS('dsStatus', 'error', '请先生成策略方案'); return; }
   const s = S.anaStrategies[key];
-  if (!s) { showS('dsStatus', 'error', `方案 ${key} 数据不存在，请重新生成策略`); return; }
+  if (!s) { showS('dsStatus', 'error', `方案 ${key} 数据不存在，请先重新生成策略`); return; }
 
   const pos = s.positioning || {};
   const kw = s.keywords || {};
@@ -1439,6 +1439,27 @@ function poll8000(taskId, onSuccess, onError) {
       if (!d) throw new Error('Invalid response');
       if (d.status === 'SUCCESS') { done = true; onSuccess(d.result); return; }
       if (d.status === 'FAILURE') { done = true; onError(d.error_message || '任务失败'); return; }
+      if (attempts < max) setTimeout(poll, 2000); else onError('任务超时');
+    }).catch(e => { if (attempts < max && !done) setTimeout(poll, 2000); else onError(`轮询失败: ${e.message}`); });
+  };
+  poll();
+}
+
+// 带进度的轮询：onProgress(pct, stage) 每次状态检查调用，onSuccess(result) 成功时调用
+function pollWithProgress(taskId, onProgress, onSuccess, onError) {
+  let attempts = 0, max = 450, done = false;
+  const poll = () => {
+    if (done) return;
+    attempts++;
+    fetch(`${A8_API}/tasks/${taskId}`).then(r => r.json()).then(payload => {
+      const d = payload?.data;
+      if (!d) throw new Error('Invalid response');
+      if (d.status === 'SUCCESS') { done = true; onSuccess(d.result); return; }
+      if (d.status === 'FAILURE') { done = true; onError(d.error_message || '任务失败'); return; }
+      // RUNNING 状态：检查进度信息
+      if (d.result && d.result.progress !== undefined) {
+        onProgress(d.result.progress, d.result.stage || '');
+      }
       if (attempts < max) setTimeout(poll, 2000); else onError('任务超时');
     }).catch(e => { if (attempts < max && !done) setTimeout(poll, 2000); else onError(`轮询失败: ${e.message}`); });
   };
@@ -1782,7 +1803,7 @@ async function generateShot(i) {
   const hasPrompt = (shot.scene_prompt || '').trim();
   if (!hasImage && !hasPrompt) {
     const btnEl = document.getElementById('btnGenShot' + i);
-    if (btnEl) { btnEl.textContent = '⚠️ 请填写场景描述或参考图'; btnEl.style.color = '#e53e3e'; }
+    if (btnEl) { btnEl.textContent = '⚠️ 请先填写场景描述或参考图'; btnEl.style.color = '#e53e3e'; }
     return;
   }
 
@@ -1864,8 +1885,14 @@ async function generateShot(i) {
 
 // 精铺模式合成
 async function doComposePremium() {
-  const shots = S.storyboard.shots;
-  if (!shots.length) { showS('vidComposeStatus', 'error', '请添加至少一个分镜'); return; }
+  const allShots = S.storyboard.shots;
+  if (!allShots.length) { showS('vidComposeStatus', 'error', '请先添加至少一个分镜'); return; }
+
+  // 只合成已生成视频的镜头（有 clip_url）
+  const activeShots = allShots.filter(s => s.clip_url);
+  if (!activeShots.length) { showS('vidComposeStatus', 'error', '请先生成至少一个分镜视频'); return; }
+  const skipped = allShots.length - activeShots.length;
+  if (skipped > 0) showS('vidComposeStatus', 'info', `跳过 ${skipped} 个未生成视频的镜头，合成 ${activeShots.length} 镜`);
 
   const hasUploadedAudio = S.uploadedAudio && S.uploadedAudio.length;
   const hasUploadedSrt = S.uploadedSrt && S.uploadedSrt.length;
@@ -1885,63 +1912,79 @@ async function doComposePremium() {
   const resSelect = document.getElementById('vidResolution');
   const resolution = resSelect ? resSelect.value : '720p';
 
+  // 有声模式跳过外部 TTS（Seedance 原生音频）
+  const skipExternalAudio = S.vidGenAudio;
+
   try {
-    // 将预生成的 clip_url 映射为 clip_path
-    const shotsWithClips = shots.map(s => ({...s, clip_path: s.clip_url || ''}));
-    const res = await fetch(`${A8_API}/video/compose-premium`, {
+    // Step 1: 为选中镜头重新配音
+    let composeAudioPath = S.audioPath || '';
+    let composeSrtPath = S.srtPath || '';
+
+    if (!skipExternalAudio) {
+      const voiceText = activeShots.map(s => s.voiceover || '').filter(Boolean).join('\n');
+      if (voiceText) {
+        stage.textContent = '重新配音中...';
+        bar.style.width = '5%';
+        const ttsTaskId = 'compose_' + Date.now().toString(36);
+        const ttsRes = await fetch(`${A8_API}/video/generate-tts`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            text: voiceText, task_id: ttsTaskId,
+            voice: document.getElementById('vidVoice').value,
+            rate: document.getElementById('vidRate').value,
+          }),
+        });
+        if (!ttsRes.ok) { const errtxt = await ttsRes.text(); throw new Error('配音提交失败: ' + errtxt.slice(0, 100)); }
+        const ttsData = await ttsRes.json();
+        await new Promise((resolve, reject) => {
+          poll8000(ttsData.data.task_id, (result) => {
+            composeAudioPath = result.audio_path;
+            composeSrtPath = result.srt_path;
+            resolve();
+          }, reject);
+        });
+      }
+    }
+
+    // Step 2: 合成视频
+    const shotsWithClips = activeShots.map(s => ({...s, clip_path: s.clip_url || ''}));
+    stage.textContent = '提交合成任务...';
+    bar.style.width = '10%';
+
+    const composeRes = await fetch(`${A8_API}/video/compose-premium`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         shots: shotsWithClips,
         images: fallbackImages,
-        // 有声模式使用 Seedance 原生音频，不覆盖外部 TTS/字幕
-        audio_path: S.vidGenAudio ? '' : (hasUploadedAudio ? S.uploadedAudio : (S.audioPath || '')),
-        srt_path: S.vidGenAudio ? '' : (hasUploadedSrt ? S.uploadedSrt : (S.srtPath || '')),
+        audio_path: hasUploadedAudio ? S.uploadedAudio : composeAudioPath,
+        srt_path: hasUploadedSrt ? S.uploadedSrt : composeSrtPath,
         task_id: S.scriptTaskId || 'premium_' + Date.now().toString(36),
         aspect_ratio: spec,
         generate_audio: S.vidGenAudio || false,
         resolution: resolution,
-        segment_durations: S.vidSegmentDurations || [],
       }),
     });
-    if (!res.ok) { const text = await res.text(); let msg = text; try { msg = JSON.parse(text).detail || msg; } catch(_) {} throw new Error(msg.slice(0, 200)); }
+    if (!composeRes.ok) { const text = await composeRes.text(); let msg = text; try { msg = JSON.parse(text).detail || msg; } catch(_) {} throw new Error(msg.slice(0, 200)); }
+    const composeData = await composeRes.json();
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let lastData = null;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
-        const jsonStr = trimmed.slice(6);
-        try {
-          const msg = JSON.parse(jsonStr);
-          if (msg.error) throw new Error(msg.error);
-          if (msg.progress !== undefined) {
-            bar.style.width = (msg.progress * 100) + '%';
-            stage.textContent = msg.stage || '';
-          } else {
-            lastData = msg;
-          }
-        } catch(e) { if (e.message !== jsonStr.slice(0, 50)) throw e; }
-      }
-    }
-
-    if (!lastData || !lastData.video_path) throw new Error('未返回视频路径');
-    const player = document.getElementById('vidPlayer');
-    player.src = lastData.video_path;
-    document.getElementById('vidPreview').style.display = '';
-    document.getElementById('vidDownload').href = lastData.video_path;
-    bar.style.width = '100%';
-    stage.textContent = lastData.quality && lastData.quality.warnings
-      ? '合成完成（有质检警告）' : '合成完成';
-    showS('vidComposeStatus', 'success', `视频合成完成 · ${lastData.duration_sec || '?'}s`);
-    player.scrollIntoView({ behavior: 'smooth' });
+    // 轮询合成进度
+    await new Promise((resolve, reject) => {
+      pollWithProgress(composeData.data.task_id,
+        (pct, msg) => { bar.style.width = (pct * 100) + '%'; stage.textContent = msg; },
+        (result) => {
+          bar.style.width = '100%';
+          stage.textContent = (result.quality && result.quality.warnings) ? '合成完成（有质检警告）' : '合成完成';
+          const player = document.getElementById('vidPlayer');
+          player.src = result.video_path;
+          document.getElementById('vidPreview').style.display = '';
+          document.getElementById('vidDownload').href = result.video_path;
+          showS('vidComposeStatus', 'success', `视频合成完成 · ${result.duration_sec || '?'}s`);
+          player.scrollIntoView({ behavior: 'smooth' });
+          resolve();
+        },
+        reject
+      );
+    });
   } catch(e) { showS('vidComposeStatus', 'error', `合成失败: ${e.message}`); }
   finally { btn.disabled = false; btn.textContent = '🎬 合成视频'; }
 }
@@ -1962,7 +2005,7 @@ async function vidUploadImagesChange() {
     if (!S.uploadedImages) S.uploadedImages = [];
     S.uploadedImages = S.uploadedImages.concat(data.data.images);
     renderUploadedImages();
-  } catch(e) { alert('图片上传失败: ' + e.message); }
+  } catch(e) { showS('vidComposeStatus', 'error', '图片上传失败: ' + e.message); }
   finally {
     zone.classList.remove('uploading');
     input.value = '';
@@ -2014,7 +2057,7 @@ async function vidUploadAudioChange() {
     const card = document.getElementById('vidUploadAudioCard');
     card.style.display = '';
     card.querySelector('.audio-card-name').textContent = file.name;
-  } catch(e) { alert('音频上传失败: ' + e.message); }
+  } catch(e) { showS('vidComposeStatus', 'error', '音频上传失败: ' + e.message); }
   finally {
     zone.classList.remove('uploading');
     input.value = '';
@@ -2030,7 +2073,7 @@ function removeUploadedAudio() {
 
 // 从配音设置一键导入音频和字幕到上传区
 function importTtsToCompose() {
-  if (!S.audioPath && !S.srtPath) { alert('请先在「配音设置」中生成配音'); return; }
+  if (!S.audioPath && !S.srtPath) { showS('vidComposeStatus', 'error', '请先在「配音设置」中生成配音'); return; }
   if (S.audioPath) {
     S.uploadedAudio = S.audioPath;
     document.getElementById('vidAudioZone').style.display = 'none';
@@ -2066,7 +2109,7 @@ async function vidUploadSrtChange() {
     const card = document.getElementById('vidUploadSrtCard');
     card.style.display = '';
     card.querySelector('.audio-card-name').textContent = file.name;
-  } catch(e) { alert('字幕上传失败: ' + e.message); }
+  } catch(e) { showS('vidComposeStatus', 'error', '字幕上传失败: ' + e.message); }
   finally {
     zone.classList.remove('uploading');
     input.value = '';
@@ -2089,7 +2132,7 @@ function removeUploadedImage(index) {
 // 合成
 async function doCompose() {
   const hasUploadedImages = S.uploadedImages && S.uploadedImages.length;
-  if (!hasUploadedImages) { showS('vidComposeStatus', 'error', '请上传图片素材'); return; }
+  if (!hasUploadedImages) { showS('vidComposeStatus', 'error', '请先上传图片素材'); return; }
   const btn = document.getElementById('btnCompose');
   btn.disabled = true; btn.textContent = '⏳ 合成中...';
   document.getElementById('vidComposeStatus').textContent = '';
@@ -2305,9 +2348,9 @@ function removeIgRef(index) {
 
 async function doImageGen() {
   const raw = document.getElementById('igPrompts').value.trim();
-  if (!raw) { showS('igStatus', 'error', '请输入至少一条提示词'); return; }
+  if (!raw) { showS('igStatus', 'error', '请先输入至少一条提示词'); return; }
   const prompts = raw.split('\n').map(s => s.trim()).filter(Boolean);
-  if (!prompts.length) { showS('igStatus', 'error', '请输入至少一条提示词'); return; }
+  if (!prompts.length) { showS('igStatus', 'error', '请先输入至少一条提示词'); return; }
 
   const size = document.getElementById('igSize').value;
   const btn = document.getElementById('btnImageGen');
@@ -2463,13 +2506,13 @@ async function copyImageUrl(url, btn) {
 
 function copyAllUrls() {
   const urls = (S._genImages || []).map(img => img.url).join('\n');
-  if (!urls) { alert('图库为空'); return; }
-  navigator.clipboard.writeText(urls).catch(() => alert('复制失败'));
+  if (!urls) { showS('igStatus', 'error', '图库为空'); return; }
+  navigator.clipboard.writeText(urls).catch(() => showS('igStatus', 'error', '复制失败'));
 }
 
 async function downloadAllImages() {
   const imgs = S._genImages || [];
-  if (!imgs.length) { alert('图库为空'); return; }
+  if (!imgs.length) { showS('igStatus', 'error', '图库为空'); return; }
 
   // File System Access API：自选文件夹
   if (window.showDirectoryPicker) {
@@ -2490,10 +2533,10 @@ async function downloadAllImages() {
           ok++;
         } catch (e) { console.warn('下载失败:', name, e); }
       }
-      alert(`✅ 已保存 ${ok}/${imgs.length} 张`);
+      showS('igStatus', 'success', `已保存 ${ok}/${imgs.length} 张`);
       return;
     } catch (e) {
-      if (e.name !== 'AbortError') alert('保存失败: ' + e.message);
+      if (e.name !== 'AbortError') showS('igStatus', 'error', '保存失败: ' + e.message);
       return;
     }
     return;

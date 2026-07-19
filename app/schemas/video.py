@@ -42,6 +42,7 @@ class ShotSchema(BaseModel):
     duration_sec: float = 5.0
     overlay_text: str = ""
     resolution: str = "720p"
+    clip_path: str = ""  # 前端预生成的 clip_url 映射
 
 
 class ComposePremiumRequest(BaseModel):
