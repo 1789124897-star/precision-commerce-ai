@@ -1,8 +1,13 @@
+"""1688 采集 Celery 任务"""
+import logging
+
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
 from app.models import Product
 from app.repositories.task_repo import TaskRepo
 from app.services.scraper import ImageScraper
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(
@@ -16,6 +21,7 @@ from app.services.scraper import ImageScraper
     retry_jitter=True,
 )
 def scrape_product_task(self, url: str, task_id: str):
+    logger.info("开始 task_id=%s url=%s", task_id, url)
     with SyncSession() as db:
         task = TaskRepo.get_by_id(db, task_id)
         if task:
@@ -26,6 +32,7 @@ def scrape_product_task(self, url: str, task_id: str):
     try:
         result = ImageScraper().scrape(url, task_id)
     except Exception as e:
+        logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
             task = TaskRepo.get_by_id(db, task_id)
             if task:
@@ -49,4 +56,5 @@ def scrape_product_task(self, url: str, task_id: str):
         db.add(product)
         db.commit()
 
-    return {"task_id": task_id, "status": "SUCCESS"}
+    logger.info("完成 task_id=%s", task_id)
+    return {"folder": result.get("folder"), "image_count": result.get("image_count")}

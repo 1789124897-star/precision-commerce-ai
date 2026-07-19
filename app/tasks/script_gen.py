@@ -1,9 +1,12 @@
 """脚本生成 Celery 任务 — 从 video.py 同步调用收敛为异步管道"""
+import logging
 
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
 from app.repositories.task_repo import TaskRepo
 from app.services.script_generator import ScriptGenerator
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(
@@ -17,6 +20,7 @@ from app.services.script_generator import ScriptGenerator
     retry_jitter=True,
 )
 def script_gen_task(self, task_id: str):
+    logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
         task = TaskRepo.get_by_id(db, task_id)
         if task:
@@ -27,6 +31,7 @@ def script_gen_task(self, task_id: str):
     try:
         result = ScriptGenerator().run_sync(**task.request_json)
     except Exception as e:
+        logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
             task = TaskRepo.get_by_id(db, task_id)
             if task:
@@ -42,4 +47,5 @@ def script_gen_task(self, task_id: str):
             task.result_json = result
             db.commit()
 
+    logger.info("完成 task_id=%s", task_id)
     return {"task_id": task_id, "status": "SUCCESS"}
