@@ -34,6 +34,7 @@ async def generate_script(body: GenerateScriptRequest, db: AsyncSession = Depend
             "content": body.content,
             "target_segments": body.segments,
             "system_prompt": body.system_prompt,
+            "tts_rate": body.tts_rate,
         },
     )
     db.add(task)

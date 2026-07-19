@@ -6,8 +6,9 @@ import random
 import subprocess
 import tempfile
 import uuid
+from math import ceil
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 import numpy as np
 from moviepy import (
@@ -24,6 +25,7 @@ from proglog import ProgressBarLogger
 
 from app.core.paths import OUTPUT_DIR, VIDEO_DIR
 from app.services.seedance_service import SeedanceService
+from app.services.shot_grouper import ShotGrouper
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,28 @@ FONT_PATH = next((p for p in _FONT_DIRS if p.exists()), None)
 
 class VideoComposer:
     """Ken Burns 风格视频合成器"""
+
+    # ── 共享工具 ──
+
+    def _report(self, pct: float, stage: str, on_progress=None):
+        """统一的进度报告器，供 compose / compose_premium 共用。"""
+        if on_progress:
+            on_progress(pct, stage)
+        logger.info(f"[{pct*100:.0f}%] {stage}")
+
+    @staticmethod
+    def _make_encode_logger(encode_start: float, encode_end: float, on_progress=None):
+        """工厂：创建编码进度 Logger，供 compose / compose_premium 共用。"""
+        class _EncodeLogger(ProgressBarLogger):
+            total_frames = 0
+            def bars_callback(self, bar, attr, value, old_value=None):
+                if bar == "frame_index" and attr == "total":
+                    self.total_frames = value
+                elif bar == "frame_index" and attr == "index" and self.total_frames:
+                    pct = encode_start + (value / self.total_frames) * (encode_end - encode_start)
+                    if on_progress:
+                        on_progress(round(pct, 3), f"编码中 {value}/{self.total_frames} 帧")
+        return _EncodeLogger()
 
     def compose(
         self,
@@ -59,10 +83,7 @@ class VideoComposer:
         Returns:
             {"video_path": str, "duration_sec": float, "quality": dict|None}
         """
-        def report(pct: float, stage: str):
-            if on_progress:
-                on_progress(pct, stage)
-            logger.info(f"[{pct*100:.0f}%] {stage}")
+        report = lambda p, s: self._report(p, s, on_progress)
 
         # 解析分辨率
         w, h = self._parse_aspect(aspect_ratio)
@@ -146,34 +167,25 @@ class VideoComposer:
 
         encode_start = 0.85
         encode_end = 0.99
+        encode_logger = self._make_encode_logger(encode_start, encode_end, on_progress)
+        try:
+            video.write_videofile(
+                str(out_path),
+                fps=25,
+                codec="libx264",
+                audio_codec="aac",
+                preset="medium",
+                threads=4,
+                logger=encode_logger,
+            )
 
-        class EncodeLogger(ProgressBarLogger):
-            total_frames = 0
-            def bars_callback(self, bar, attr, value, old_value=None):
-                if bar == "frame_index" and attr == "total":
-                    self.total_frames = value
-                elif bar == "frame_index" and attr == "index" and self.total_frames:
-                    pct = encode_start + (value / self.total_frames) * (encode_end - encode_start)
-                    if on_progress:
-                        on_progress(round(pct, 3), f"编码中 {value}/{self.total_frames} 帧")
-
-        encode_logger = EncodeLogger()
-        video.write_videofile(
-            str(out_path),
-            fps=25,
-            codec="libx264",
-            audio_codec="aac",
-            preset="medium",
-            threads=4,
-            logger=encode_logger,
-        )
-
-        report(1.0, "合成完成")
-
-        # 清理
-        if has_audio:
-            audio.close()
-        video.close()
+            report(1.0, "合成完成")
+        finally:
+            # 清理 MoviePy 临时文件
+            if has_audio:
+                audio.close()
+            video.close()
+            self._cleanup_temp_files()
 
         video_url = "/output/videos/" + out_name
         quality = None
@@ -203,6 +215,18 @@ class VideoComposer:
             local = url_or_path[len("/output/"):]
             return OUTPUT_DIR / local
         return Path(url_or_path)
+
+    def _cleanup_temp_files(self):
+        """清理 MoviePy 遗留的临时文件（如 TEMP_MPY_wvf_snd.mp4）"""
+        import glob
+        cwd = Path.cwd()
+        for pattern in ["TEMP_MPY_*", "temp_mpy_*"]:
+            for f in cwd.glob(pattern):
+                try:
+                    f.unlink()
+                    logger.info(f"已清理 MoviePy 临时文件: {f.name}")
+                except OSError:
+                    pass
 
     def _check_quality(self, video_path: Path, expected_duration: float) -> dict:
         """使用 ffprobe 验证输出视频质量。"""
@@ -409,49 +433,6 @@ class VideoComposer:
 
         return img
 
-    def _render_overlay_text(self, clip: VideoClip, text: str, w: int, h: int) -> VideoClip:
-        """在视频底部叠加白色描边卖点文案。"""
-        if not text.strip():
-            return clip
-
-        font = self._load_font(40)
-        margin = 40
-        lines = []
-        current = ""
-        for char in text:
-            test = current + char
-            if font.getbbox(test)[2] > w - margin * 2:
-                lines.append(current)
-                current = char
-            else:
-                current = test
-        if current:
-            lines.append(current)
-        if not lines:
-            return clip
-
-        line_h = font.getbbox("测")[3] + 12
-        img_h = line_h * len(lines) + margin
-        img_w = w
-
-        img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-
-        for i, line in enumerate(lines):
-            bbox = font.getbbox(line)
-            text_w = bbox[2]
-            x = (img_w - text_w) // 2
-            y = margin // 2 + i * line_h
-            draw.text((x + 2, y + 2), line, font=font, fill=(0, 0, 0, 160))
-            draw.text((x, y), line, font=font, fill=(255, 255, 255, 255))
-
-        tmp = Path(tempfile.gettempdir()) / f"overlay_{uuid.uuid4().hex[:8]}.png"
-        img.save(str(tmp))
-
-        overlay = ImageClip(str(tmp), duration=clip.duration)
-        overlay = overlay.with_position(("center", int(h * 0.75)))
-        return CompositeVideoClip([clip, overlay])
-
     def compose_premium(
         self,
         shots: list[dict],
@@ -462,17 +443,16 @@ class VideoComposer:
         aspect_ratio: str = "9:16",
         generate_audio: bool = False,
         on_progress: Optional[Callable[[float, str], None]] = None,
+        segment_durations: Optional[list[float]] = None,
     ) -> dict:
         """精铺模式合成：按分镜列表生成场景展示视频。
 
         Args:
             shots: [{image_index, scene_prompt, duration_sec, overlay_text}, ...]
             images: 图片 URL 列表
+            segment_durations: 每段口播的实际 TTS 时长（秒），非空时自动启动镜头组分组
         """
-        def report(pct: float, stage: str):
-            if on_progress:
-                on_progress(pct, stage)
-            logger.info(f"[premium {pct*100:.0f}%] {stage}")
+        report = lambda p, s: self._report(p, s, on_progress)
 
         w, h = self._parse_aspect(aspect_ratio)
         report(0.0, f"加载 {len(images)} 张图片...")
@@ -499,23 +479,52 @@ class VideoComposer:
         speed = total_design_dur / total_duration if total_duration > 0 else 1.0
         logger.info(f"精铺: {total_shots} 镜, 设计时长 {total_design_dur:.1f}s, 音频 {total_duration:.1f}s, 速率 {speed:.2f}")
 
+        # ── 镜头组分组 ──
+        # 有实际 TTS 时长时，将短段合并为镜头组，确保每组 ≥4s
+        if segment_durations:
+            grouper = ShotGrouper(min_dur=4.0, max_dur=12.0)
+            shot_groups = grouper.group(shots, segment_durations)
+            logger.info(f"镜头组分组: {len(shots)} 镜 → {len(shot_groups)} 组")
+            # 统一迭代格式
+            iterate_over = shot_groups
+            use_groups = True
+        else:
+            # 无 TTS 时长时退化为原有 1:1 模式，但依然保证 ≥4s 底限
+            iterate_over = [{
+                "shots": [s],
+                "tts_duration": s.get("duration_sec", 5),
+                "seedance_dur": max(4, int(ceil(s.get("duration_sec", 5)))),
+                "image_url": s.get("image_url", ""),
+                "first_frame_url": s.get("first_frame_url", ""),
+                "last_frame_url": s.get("last_frame_url", ""),
+                "scene_prompt": s.get("scene_prompt", ""),
+                "mode": "single",
+            } for s in shots]
+            use_groups = False
+
         clips: list = []
         time_elapsed = 0.0
-        for i, shot in enumerate(shots):
-            dur = shot.get("duration_sec", 5) / max(speed, 0.1)
-            dur = max(2.0, min(dur, 12.0))  # Seedance 1.5 pro 支持 2~12s
-            scene_prompt = shot.get("scene_prompt", "")
-            image_url = shot.get("image_url", "")
-            first_frame_url = shot.get("first_frame_url", "")
-            last_frame_url = shot.get("last_frame_url", "")
-            pre_generated = shot.get("clip_path", "")
+        total_items = len(iterate_over)
+        for i, group in enumerate(iterate_over):
+            # 镜头组直接用已算好的 seedance_dur（已在 [4, 12] 内）
+            dur = float(group["seedance_dur"])
+            scene_prompt = group.get("scene_prompt", "")
+            image_url = group.get("image_url", "")
+            first_frame_url = group.get("first_frame_url", "")
+            last_frame_url = group.get("last_frame_url", "")
+            group_mode = group.get("mode", "single")
+            segment_count = len(group.get("shots", [group]))
+            # 预生成 clip：仅单段模式下使用
+            pre_generated = group["shots"][0].get("clip_path", "") if group["shots"] else ""
 
-            pct = 0.05 + (i / total_shots) * 0.55
-            report(pct, f"分镜 {i + 1}/{total_shots} ({dur:.1f}s)")
+            label = f"镜组{i+1}/{total_items}" if use_groups else f"分镜{i+1}/{total_items}"
+            detail = f"({dur}s" + (f", {segment_count}段口播)" if segment_count > 1 else ")")
+            pct = 0.05 + (i / total_items) * 0.55
+            report(pct, f"{label} {dur:.1f}s" + (f" ×{segment_count}段" if segment_count > 1 else ""))
 
             clip = None
 
-            # 优先使用已预生成的分镜视频
+            # 优先使用已预生成的分镜视频（仅单段模式）
             if pre_generated:
                 pre_path = self._to_local(pre_generated)
                 if pre_path.exists():
@@ -523,15 +532,14 @@ class VideoComposer:
                         clip = VideoFileClip(str(pre_path))
                         if clip.duration > dur + 1.5:
                             clip = clip.subclipped(0, dur)
-                        logger.info(f"镜{i+1} 使用预生成 clip: {clip.duration:.1f}s (目标 {dur:.1f}s)")
+                        logger.info(f"{label} 使用预生成 clip: {clip.duration:.1f}s (目标 {dur:.1f}s)")
                     except Exception as e:
-                        logger.warning(f"镜{i+1} 预生成 clip 加载失败: {e}")
+                        logger.warning(f"{label} 预生成 clip 加载失败: {e}")
                 else:
-                    logger.warning(f"镜{i+1} 预生成 clip 不存在: {pre_path}")
+                    logger.warning(f"{label} 预生成 clip 不存在: {pre_path}")
 
-            # Seedance AI 图生视频（直传 URL），失败回退 Ken Burns
-            if first_frame_url and first_frame_url.startswith("http") and last_frame_url and last_frame_url.startswith("http"):
-                # 首尾帧视频生成
+            # ── 镜头组首尾帧模式（多段合并） ──
+            if clip is None and group_mode == "first_last" and first_frame_url and last_frame_url:
                 try:
                     seedance_path = asyncio.run(SeedanceService().generate_clip_first_last_frame(
                         first_frame_url=first_frame_url,
@@ -545,10 +553,12 @@ class VideoComposer:
                     clip = VideoFileClip(str(seedance_path))
                     if clip.duration > dur + 1.5:
                         clip = clip.subclipped(0, dur)
-                    logger.info(f"镜{i+1} Seedance 首尾帧完成: {clip.duration:.1f}s (目标 {dur:.1f}s)")
+                    logger.info(f"{label} 首尾帧完成: {clip.duration:.1f}s (目标 {dur}s, {segment_count}段)")
                 except Exception as e:
-                    logger.warning(f"镜{i+1} Seedance 首尾帧失败: {e}")
-            elif image_url and image_url.startswith("http"):
+                    logger.warning(f"{label} 首尾帧失败: {e}")
+
+            # Seedance 图生视频（单图模式），失败回退 Ken Burns
+            if clip is None and image_url and image_url.startswith("http"):
                 try:
                     seedance_path = asyncio.run(SeedanceService().generate_clip_from_url(
                         image_url=image_url,
@@ -561,11 +571,12 @@ class VideoComposer:
                     clip = VideoFileClip(str(seedance_path))
                     if clip.duration > dur + 1.5:
                         clip = clip.subclipped(0, dur)
-                    logger.info(f"镜{i+1} Seedance 图生视频完成: {clip.duration:.1f}s (目标 {dur:.1f}s)")
+                    logger.info(f"{label} 图生视频完成: {clip.duration:.1f}s (目标 {dur}s)")
                 except Exception as e:
-                    logger.warning(f"镜{i+1} Seedance 图生视频失败: {e}")
-            elif scene_prompt:
-                # 纯文生视频：无参考图，仅凭场景描述生成
+                    logger.warning(f"{label} 图生视频失败: {e}")
+
+            # 纯文生视频：无参考图，仅凭场景描述生成
+            if clip is None and scene_prompt:
                 try:
                     seedance_path = asyncio.run(SeedanceService().generate_clip_text_only(
                         prompt=scene_prompt,
@@ -576,26 +587,23 @@ class VideoComposer:
                     clip = VideoFileClip(str(seedance_path))
                     if clip.duration > dur + 1.5:
                         clip = clip.subclipped(0, dur)
-                    logger.info(f"镜{i+1} Seedance 文生视频完成: {clip.duration:.1f}s (目标 {dur:.1f}s)")
+                    logger.info(f"{label} 文生视频完成: {clip.duration:.1f}s (目标 {dur}s)")
                 except Exception as e:
-                    logger.warning(f"镜{i+1} Seedance 文生视频失败: {e}")
+                    logger.warning(f"{label} 文生视频失败: {e}")
 
             # Seedance 未启用或失败 → Ken Burns 回退
             if clip is None:
                 if local_images:
-                    img_idx = min(shot.get("image_index", 0), len(local_images) - 1)
+                    # 镜头组用第一个 shot 的 image_index
+                    first_shot = group["shots"][0] if group.get("shots") else group
+                    img_idx = min(first_shot.get("image_index", 0), len(local_images) - 1)
                     clip = self._ken_burns_clip(local_images[img_idx], w, h, dur)
                 else:
                     # 既无 URL 也无本地图片：生成纯色占位
-                    logger.warning(f"镜{i+1} 无图片可用，使用占位")
+                    logger.warning(f"{label} 无图片可用，使用占位")
                     clip = self._ken_burns_clip(
                         self._make_placeholder(w, h), w, h, dur
                     )
-
-            # 叠加卖点文字
-            overlay_text = shot.get("overlay_text", "")
-            if overlay_text.strip():
-                clip = self._render_overlay_text(clip, overlay_text, w, h)
 
             if i > 0:
                 clip = clip.with_effects([vfx.FadeIn(0.3)])
@@ -631,33 +639,24 @@ class VideoComposer:
 
         encode_start = 0.82
         encode_end = 0.98
+        encode_logger = self._make_encode_logger(encode_start, encode_end, on_progress)
+        try:
+            video.write_videofile(
+                str(out_path),
+                fps=25,
+                codec="libx264",
+                audio_codec="aac",
+                preset="medium",
+                threads=4,
+                logger=encode_logger,
+            )
 
-        class EncodeLogger(ProgressBarLogger):
-            total_frames = 0
-            def bars_callback(self, bar, attr, value, old_value=None):
-                if bar == "frame_index" and attr == "total":
-                    self.total_frames = value
-                elif bar == "frame_index" and attr == "index" and self.total_frames:
-                    pct = encode_start + (value / self.total_frames) * (encode_end - encode_start)
-                    if on_progress:
-                        on_progress(round(pct, 3), f"编码中 {value}/{self.total_frames} 帧")
-
-        encode_logger = EncodeLogger()
-        video.write_videofile(
-            str(out_path),
-            fps=25,
-            codec="libx264",
-            audio_codec="aac",
-            preset="medium",
-            threads=4,
-            logger=encode_logger,
-        )
-
-        report(1.0, "合成完成")
-
-        if has_audio:
-            audio.close()
-        video.close()
+            report(1.0, "合成完成")
+        finally:
+            if has_audio:
+                audio.close()
+            video.close()
+            self._cleanup_temp_files()
 
         video_url = "/output/videos/" + out_name
         quality = self._check_quality(out_path, total_duration)

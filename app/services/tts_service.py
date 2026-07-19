@@ -9,13 +9,16 @@ from pathlib import Path
 
 import edge_tts
 
-from app.core.paths import AUDIO_DIR
+from app.core.paths import AUDIO_DIR, OUTPUT_DIR
+from app.services.ai_client import AIClient
 from app.services.script_generator import ScriptGenerator
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
 DEFAULT_RATE = "+0%"
+
+_PUNCTUATION = {"。", "！", "？", "!", "?", "，", ",", "、", "：", "；", ".", "~", "～", "…"}
 
 
 class TTSEngine:
@@ -40,7 +43,7 @@ class TTSEngine:
 
         text 非空且无 script_path 时自动落盘。
         Returns:
-            {audio_path, srt_path, duration_sec}
+            {audio_path, srt_path, duration_sec, segment_durations}
         """
         v = voice or DEFAULT_VOICE
         r = rate or DEFAULT_RATE
@@ -77,10 +80,30 @@ class TTSEngine:
 
         duration = result["offset_ticks"] / 10_000_000  # ticks → 秒
 
+        # 解析 SRT 条目 → 贪心分组 → AI 生成镜头场景描述
+        srt_entries = _parse_srt_entries(srt_path)
+        logger.info(f"TTS SRT 条目数: {len(srt_entries)}, 总时长: {round(duration, 1)}s")
+
+        grouped_shots = _group_srt_into_shots(srt_entries)
+        logger.info(f"TTS 分组后镜头数: {len(grouped_shots)}")
+
+        # AI 生成每组镜头的场景描述
+        voiceovers = [s["voiceover"] for s in grouped_shots]
+        try:
+            scene_prompts = await AIClient().generate_shot_scenes(voiceovers=voiceovers)
+            for shot, sp in zip(grouped_shots, scene_prompts):
+                shot["scene_prompt"] = sp
+            logger.info(f"TTS 镜头场景描述生成完成: {len(scene_prompts)} 组")
+        except Exception as e:
+            logger.warning(f"TTS 镜头场景描述生成失败，使用空占位: {e}")
+            for shot in grouped_shots:
+                shot["scene_prompt"] = ""
+
         return {
-            "audio_path": "/" + str(audio_path).replace("\\", "/"),
-            "srt_path": "/" + str(srt_path).replace("\\", "/"),
+            "audio_path": "/output/" + str(audio_path.relative_to(OUTPUT_DIR)).replace("\\", "/"),
+            "srt_path": "/output/" + str(srt_path.relative_to(OUTPUT_DIR)).replace("\\", "/"),
             "duration_sec": round(duration, 1),
+            "grouped_shots": grouped_shots,
         }
 
     def run_sync(self, **kwargs) -> dict:
@@ -168,7 +191,7 @@ def _generate_srt_from_words(
     - 尾部残留 < 4 字 → 并入上一句
     """
     MAX_CHARS = 18
-    BREAK_CHARS = {"。", "！", "？", "!", "?", "，", ","}
+    BREAK_CHARS = {ch for ch in _PUNCTUATION if ch in {"。", "！", "？", "!", "?", "，", ","}}
 
     # 逐字扫描，按标点聚合成片段
     raw_chunks: list[dict] = []
@@ -210,7 +233,77 @@ def _generate_srt_from_words(
     return output_path
 
 
-_PUNCTUATION = {"。", "！", "？", "!", "?", "，", ",", "、", "：", "；", ".", "~", "～", "…"}
+def _parse_srt_entries(srt_path: Path) -> list[dict]:
+    """解析 SRT 文件，返回每条字幕的 {text, start_sec, end_sec, duration_sec}。"""
+    if not srt_path.exists():
+        raise FileNotFoundError(f"SRT 文件不存在: {srt_path}")
+
+    raw = srt_path.read_text(encoding="utf-8").strip()
+    entries: list[dict] = []
+    for block in raw.split("\n\n"):
+        lines = block.strip().split("\n")
+        if len(lines) < 3:
+            continue
+        times = lines[1].split(" --> ")
+        if len(times) != 2:
+            continue
+        start_sec = _srt_to_secs(times[0].strip())
+        end_sec = _srt_to_secs(times[1].strip())
+        text = "".join(lines[2:])
+        entries.append({
+            "text": text,
+            "start_sec": round(start_sec, 3),
+            "end_sec": round(end_sec, 3),
+            "duration_sec": round(end_sec - start_sec, 3),
+        })
+
+    if not entries:
+        raise RuntimeError(f"SRT 解析结果为空: {srt_path}")
+    return entries
+
+
+def _group_srt_into_shots(srt_entries: list[dict]) -> list[dict]:
+    """贪心分组：相邻 SRT 条目累加至 ≥ 4s 为一个镜头。"""
+    MIN = 4
+    groups: list[dict] = []
+    buf_entries: list[dict] = []
+    buf_dur = 0.0
+
+    def _seal():
+        nonlocal buf_entries, buf_dur
+        if not buf_entries:
+            return
+        total_dur = round(buf_dur, 3)
+        display_dur = max(total_dur, float(MIN))
+        voiceover = "".join(e["text"] for e in buf_entries)
+        groups.append({
+            "voiceover": voiceover,
+            "duration_sec": display_dur,
+            "_srtDuration": round(total_dur, 1),
+            "_mergedFrom": len(buf_entries),
+            "_mergedDurs": [round(e["duration_sec"], 2) for e in buf_entries],
+            "image_url": "",
+            "first_frame_url": "",
+            "last_frame_url": "",
+        })
+        buf_entries = []
+        buf_dur = 0.0
+
+    for entry in srt_entries:
+        dur = entry.get("duration_sec", 0)
+        if dur <= 0:
+            continue
+        if buf_dur + dur > 12 and buf_dur >= MIN:
+            _seal()
+        buf_entries.append(entry)
+        buf_dur += dur
+        if buf_dur >= MIN:
+            _seal()
+
+    if buf_entries:
+        _seal()
+
+    return groups
 
 
 def _flush_chunk(buf_words: list[tuple[int, int, str]]) -> dict:
@@ -228,3 +321,10 @@ def _secs_to_srt(secs: float) -> str:
     s = int(secs % 60)
     ms = int((secs - int(secs)) * 1000)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def _srt_to_secs(timestamp: str) -> float:
+    """SRT 时间戳 HH:MM:SS,mmm → 秒"""
+    h, m, rest = timestamp.split(":")
+    s, ms = rest.split(",")
+    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000

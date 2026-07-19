@@ -1,5 +1,7 @@
 ﻿"""Video Pydantic 模型 —— 兼容前后端字段名"""
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -7,12 +9,13 @@ class GenerateScriptRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=5000)
     segments: int = Field(default=8, ge=5, le=12)
     system_prompt: str = Field(default="", max_length=3000)
+    tts_rate: str = Field(default="+0%", max_length=10)
 
 
 class GenerateTTSRequest(BaseModel):
     script_path: str = ""
     text: str = ""
-    task_id: str
+    task_id: str = ""
     voice: str = ""
     rate: str = ""
 
@@ -50,6 +53,7 @@ class ComposePremiumRequest(BaseModel):
     aspect_ratio: str = "9:16"
     generate_audio: bool = False
     resolution: str = "720p"
+    segment_durations: Optional[list[float]] = None
 
 
 class GenerateShotRequest(BaseModel):

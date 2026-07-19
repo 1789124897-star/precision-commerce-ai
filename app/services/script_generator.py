@@ -18,8 +18,9 @@ class ScriptGenerator:
     async def generate(
         self,
         content: str,
-        target_segments: int = 8,
+        target_segments: int = 5,
         system_prompt: str = "",
+        tts_rate: str = "+0%",
     ) -> dict:
         """生成结构化口播脚本（段数强制对齐）。
 
@@ -34,6 +35,7 @@ class ScriptGenerator:
         user_prompt = build_product_script_prompt(
             content=content,
             target_segments=target_segments,
+            tts_rate=tts_rate,
         )
 
         raw = await self.ai.generate_script(system_prompt=actual_system, user_prompt=user_prompt)
@@ -54,15 +56,23 @@ class ScriptGenerator:
 
     @staticmethod
     def _build_result(segments: list[dict]) -> dict:
-        """从 segments 构建完整结果。"""
+        """从 segments 构建完整结果。同时计算每段在全文中的字符偏移量。"""
+        cumulative = ""
         for i, seg in enumerate(segments):
             seg["index"] = i
             text = seg.get("voiceover", "")
-            seg["estimated_duration"] = round(max(1.8, len(text.replace(" ", "")) * 0.28), 1)
+            # 粗估时长：中文口语 ~3.5字/秒 + 标点停顿
+            clean_len = len(text.replace(" ", ""))
+            punct_count = sum(1 for ch in text if ch in "，。！？、；：")
+            seg["estimated_duration"] = round(max(2.0, clean_len * 0.28 + punct_count * 0.2), 1)
             if "image_keywords" not in seg:
                 seg["image_keywords"] = ["产品"]
+            # 分段在全文中的字符偏移量（用于 TTS 逐字时间戳反算实际时长）
+            seg["char_start"] = len(cumulative) + (1 if cumulative else 0)
+            seg["char_end"] = seg["char_start"] + len(text)
+            cumulative += (" " if cumulative else "") + text
 
-        full_text = " ".join(s["voiceover"] for s in segments)
+        full_text = cumulative
         total_dur = round(sum(s["estimated_duration"] for s in segments), 1)
         word_count = len(full_text.replace(" ", ""))
 
