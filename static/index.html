@@ -736,7 +736,7 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
         <div>
           <div class="vid-lbl">分段数量</div>
           <div style="display:flex;gap:8px;align-items:center;">
-            <div class="vid-num-wrap"><input type="number" id="vidSegments" min="5" max="12" value="8" step="1"><span class="vid-unit">段</span></div>
+            <div class="vid-num-wrap"><input type="number" id="vidSegments" min="3" max="8" value="5" step="1"><span class="vid-unit">段</span></div>
           </div>
         </div>
         <button class="btn btn-ghost" style="height:38px;padding:0 18px;" onclick="doGenScript()" id="btnGenScript">🤖 AI生成</button>
@@ -838,6 +838,9 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
 
       <!-- 快速模式素材上传区（图片 + 音频 + 字幕） -->
       <div id="vidUploadSection" style="margin-top:10px;"></div>
+      <div id="vidImportTtsBtn" style="display:none;margin-top:6px;">
+        <button class="btn btn-ghost btn-sm" onclick="importTtsToCompose()" style="font-size:12px;width:100%;">📋 从配音设置导入音频和字幕</button>
+      </div>
 
       <!-- 操作区 -->
       <div style="border-top:1.5px solid var(--border);margin:12px 0 10px;"></div>
@@ -891,7 +894,7 @@ const S = {
   audioPath: null,
   srtPath: null,
   uploadedSrt: '',
-  _genImages: [],  // 生图 URL 缓存，供视频分镜首尾帧建议
+  _genImages: [],  // 生图 URL 缓存，供图库侧边栏使用
 
   // 通用
   productTitle: '',
@@ -939,7 +942,7 @@ async function doScrape() {
 
   try {
     const res = await fetch(`${A8_API}/scraper/scrape`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url}) });
-    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.detail || `HTTP ${res.status}`); }
+    if (!res.ok) { const d = await res.json().catch(()=>({})); const detail = d.detail; const msg = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map(e=>e.msg).join('; ') : `HTTP ${res.status}`); throw new Error(msg); }
     const data = await res.json();
     const taskId = data.data.task_id;
     showS('scrapeStatus', 'info', '正在打开 1688 页面采集图片（约 10-20 秒）...');
@@ -954,7 +957,7 @@ async function doScrape() {
           clearInterval(poll);
           S.scrapedTaskId = taskId;
           S.scrapedFolder = d.result.folder;
-          // 缓存采集图片 URL 供视频分镜首尾帧建议
+          // 缓存采集图片 URL 供图库侧边栏使用
           const imgs = d.result.images;
           if (imgs) {
             ['main_images','sku_images','detail_images'].forEach(cat => {
@@ -969,7 +972,7 @@ async function doScrape() {
           btn.disabled = false;
         } else if (d.status === 'FAILURE') {
           clearInterval(poll);
-          showS('scrapeStatus', 'error', `采集失败: ${d.error_message || '未知错误'}`);
+          showS('scrapeStatus', 'error', `采集失败: ${typeof d.error_message === 'string' ? d.error_message : '未知错误'}`);
           btn.disabled = false;
         }
       } catch(e) { clearInterval(poll); showS('scrapeStatus', 'error', `轮询失败: ${e.message}`); btn.disabled = false; }
@@ -1345,7 +1348,7 @@ async function genSelectedImages(key) {
     const taskId = payload?.data?.task_id;
     poll8000(taskId, (result) => {
       const imgs = result.images || [];
-      // 缓存 URL 供视频分镜首尾帧建议
+      // 缓存 URL 供图库侧边栏使用
       imgs.forEach(img => {
         const src = img.remote_url || img.local_path;
         if (src) S._genImages.push({ url: src, type: img.type || '', position: img.position, source: img.source || '' });
@@ -1457,18 +1460,28 @@ async function doGenScript() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         content,
-        segments: parseInt(document.getElementById('vidSegments').value) || 8,
+        segments: parseInt(document.getElementById('vidSegments').value) || 5,
         system_prompt: document.getElementById('vidSystemPrompt').value,
       }),
     });
-    if (!res.ok) throw new Error((await res.json()).detail || `HTTP ${res.status}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = typeof err.detail === 'string' ? err.detail
+        : Array.isArray(err.detail) ? err.detail.map(d => d.msg || d).join('; ')
+        : err.message || '服务器错误';
+      throw new Error(String(msg));
+    }
     const data = await res.json();
     const taskId = data.data.task_id;
     S.scriptTaskId = taskId;
     poll8000(taskId, (result) => {
       S.scriptPath = result.script_path;
       S.vidScriptSegments = result.script.segments;
-      document.getElementById('vidScript').value = result.script.segments.map(s => s.voiceover).join('\n\n');
+      document.getElementById('vidScript').value = result.script.segments.map((s, i) => {
+        return `[镜${i + 1} ${s.type}]\n📢 ${s.voiceover}`;
+      }).join('\n\n');
+      // 自动填充配音文本：提取所有口播片段合并为纯文本
+      document.getElementById('vidTtsText').value = result.script.segments.map(s => s.voiceover).join('\n');
       showS('vidScriptStatus', 'success', `已填充 · ${result.script.total_words} 字 · ${result.script.segments.length} 段 · 约 ${Math.round(result.script.estimated_duration)} 秒`);
       btn.disabled = false; btn.textContent = '🤖 AI生成';
     }, (error) => {
@@ -1499,7 +1512,13 @@ async function doGenTTS() {
         rate: document.getElementById('vidRate').value,
       }),
     });
-    if (!res.ok) throw new Error((await res.json()).detail || `HTTP ${res.status}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = typeof err.detail === 'string' ? err.detail
+        : Array.isArray(err.detail) ? err.detail.map(d => d.msg || d).join('; ')
+        : err.message || '服务器错误';
+      throw new Error(String(msg));
+    }
     const data = await res.json();
     const pollTaskId = data.data.task_id;
     S.scriptTaskId = taskId;
@@ -1512,7 +1531,21 @@ async function doGenTTS() {
       document.getElementById('vidAudioDownload').download = result.audio_path.split('/').pop() || 'audio.mp3';
       document.getElementById('vidSrtDownload').href = result.srt_path;
       document.getElementById('vidSrtDownload').download = result.srt_path.split('/').pop() || 'subtitle.srt';
-      showS('vidTTSStatus', 'success', `配音完成 · 时长 ${result.duration_sec.toFixed(1)} 秒`);
+
+      S._audioTotalDuration = result.duration_sec || 0;
+      const shots = result.grouped_shots || [];
+
+      if (shots.length) {
+        S.storyboard = { shots };
+        S.vidSegmentDurations = shots.map(s => s._srtDuration || s.duration_sec || 0);
+
+        if (S.vidComposeMode === 'premium' || S.vidComposeMode === 'premium_audio') {
+          renderStoryboard();
+        }
+        showS('vidTTSStatus', 'success', `配音完成 · ${result.duration_sec.toFixed(1)}秒 · 已自动合并为 ${shots.length} 镜`);
+      } else {
+        showS('vidTTSStatus', 'success', `配音完成 · 时长 ${result.duration_sec.toFixed(1)} 秒`);
+      }
       btn.disabled = false; btn.textContent = '🎙️ 重新配音';
     }, (error) => {
       showS('vidTTSStatus', 'error', `配音失败: ${error}`);
@@ -1532,6 +1565,8 @@ function vidRenderComposeParams() {
     S.vidComposeMode = 'fast';
     uploadSec.style.display = '';
     premiumZone.style.display = 'none';
+    const ttsImportBtn = document.getElementById('vidImportTtsBtn');
+    if (ttsImportBtn) ttsImportBtn.style.display = 'none';
     const imgZone = document.getElementById('vidUploadImagesZone');
     if (imgZone) imgZone.style.display = '';
     el.innerHTML = `
@@ -1555,31 +1590,24 @@ function vidRenderComposeParams() {
     S.vidComposeMode = mode;
     uploadSec.style.display = '';
     premiumZone.style.display = '';
+    // 精品模式：隐藏图片上传（分镜已预生成），有声模式连音频/字幕也隐藏
+    const ttsImportBtn = document.getElementById('vidImportTtsBtn');
+    if (ttsImportBtn) ttsImportBtn.style.display = S.vidGenAudio ? 'none' : '';
     const imgZone = document.getElementById('vidUploadImagesZone');
-    if (imgZone) imgZone.style.display = 'none';
     const preview = document.getElementById('vidUploadImagesPreview');
+    if (imgZone) imgZone.style.display = 'none';
     if (preview) preview.style.display = 'none';
-    // 有声模式隐藏音频上传
-    const audioZone = document.getElementById('vidAudioZone');
+    const audioCol = document.getElementById('vidAudioZone');
     const audioCard = document.getElementById('vidUploadAudioCard');
-    const imgCol = document.getElementById('vidUploadImagesZone');
-    const audioCol = audioZone ? audioZone.parentElement : null;
-    const srtCol = document.getElementById('vidSrtZone') ? document.getElementById('vidSrtZone').parentElement : null;
-    const uploadRow = document.getElementById('vidUploadSection').querySelector('div[style*="display:flex"]');
+    const srtCol = document.getElementById('vidSrtZone');
     if (S.vidGenAudio) {
-      if (audioZone) audioZone.style.display = 'none';
-      if (audioCard && S.vidGenAudio) audioCard.style.display = 'none';
-      if (imgCol) imgCol.style.display = 'none';
-      if (audioCol) audioCol.style.display = 'none';
-      if (srtCol) { srtCol.style.display = 'none'; }
-      if (uploadRow) uploadRow.style.justifyContent = 'center';
+      if (audioCol) audioCol.parentElement.style.display = 'none';
+      if (audioCard) audioCard.style.display = 'none';
+      if (srtCol) srtCol.parentElement.style.display = 'none';
     } else {
-      if (audioZone) audioZone.style.display = '';
+      if (audioCol) audioCol.parentElement.style.display = '';
       if (audioCard && S.vidGenAudio) audioCard.style.display = 'none';
-      if (imgCol) imgCol.style.display = '';
-      if (audioCol) audioCol.style.display = '';
-      if (srtCol) { srtCol.style.flex = '1'; srtCol.style.maxWidth = ''; srtCol.style.margin = ''; }
-      if (uploadRow) uploadRow.style.justifyContent = '';
+      if (srtCol) srtCol.parentElement.style.display = '';
     }
     el.innerHTML = '';
     // 恢复该模式之前保存的分镜，否则重新初始化
@@ -1596,210 +1624,58 @@ function vidRenderComposeParams() {
 // ══════════════════════════════════════════════════════
 //  精铺模式：分镜编辑器
 // ══════════════════════════════════════════════════════
-const SCENE_TEMPLATES = {
-  '办公': '白色办公桌，自然光，MacBook旁边，简洁北欧风格',
-  '自定义': '',
-};
 
-// ── 策略 → 场景 Prompt 智能映射 ──
-const USER_SCENE_MAP = {
-  '租房': '简约小户型，白色墙壁，自然光从窗户洒入，干净整洁的桌面',
-  '学生': '清新宿舍桌面，简约布置，明亮灯光，年轻活力氛围',
-  '宝妈': '温馨家庭厨房，暖色调，柔光从窗户照入，整洁台面',
-  '办公': '现代办公室桌面，简洁高效，商务氛围，窗外城市天际线',
-  '家居': '温暖卧室，暖黄床头灯，柔软织物，睡前宁静时光',
-  '户外': '户外野餐草坪，阳光透过树叶形成光斑，自然清新',
-  '极客': '科技感桌面，RGB 氛围灯，简洁现代，金属质感',
-  '礼品': '精致礼盒包装，丝带与灯光，高端送礼场景',
-};
-const PAIN_ATMOSPHERE = {
-  '潮湿': '干燥清爽环境，明亮光线，通风透气感',
-  '发霉': '洁净无菌氛围，白亮色调，一尘不染',
-  '打孔': '免安装场景，轻松布置，无破坏墙面的自然感',
-  '占空间': '紧凑但不拥挤的收纳美学，物品井井有条',
-  '难清洗': '光洁如新，易打理材质特写，水流冲洗动感',
-  '漏水': '滴水不漏的密封感，稳固设计，安全感',
-  '噪音': '静谧环境，柔光，宁静致远的氛围',
-  '异味': '清新空气感，绿色植物点缀，自然清新',
-  '脱落': '牢固稳定，承重感，结构安全感',
-  '生锈': '不锈钢质感，光泽表面，耐腐蚀的科技感',
-};
-const CAMERA_SEQUENCES = {
-  // 痛点解决型：先展示痛点场景 → 产品解决 → 美好结果
-  'A': [
-    '中景平拍：展示杂乱/潮湿的台面，暖黄侧光，带入痛点感受',
-    '特写推镜：产品缓缓入画，细节清晰可见，干净利落的设计',
-    '中景俯拍：产品在整洁场景中，明亮自然光，解决后的清爽感',
-  ],
-  // 功能对比型：对比展示 → 功能细节 → 使用效果
-  'B': [
-    '双画面分割感，左右对比，自然光，功能差异一目了然',
-    '特写微距：产品关键功能部位，柔光凸显质感',
-    '中景跟拍：产品在实际使用中的动态画面，顺滑流畅',
-  ],
-  // 场景代入型：场景建立 → 产品融入 → 生活美好
-  'C': [
-    '广角横摇：缓缓扫过整个场景空间，建立环境氛围',
-    '中景定位：产品出现在画面黄金位置，自然融入场景',
-    '特写收尾：产品与场景细节交融，柔光，电影感结尾',
-  ],
-  // 通用默认
-  '_': [
-    '中景定机位：产品居中，简洁背景，专业产品摄影风格',
-    '特写滑轨：缓慢推近产品细节，柔光，质感突出',
-    '广角收尾：产品在宽阔场景中，自然光，空间感',
-  ],
-};
-
-// 从策略数据生成场景描述
-function generateScenePrompts() {
-  const stratKey = S.vidStrategyKey;
-  const strat = (S.anaStrategies && stratKey) ? S.anaStrategies[stratKey] : null;
-  if (!strat) { alert('请先在差异化策略 Tab 选择策略，或粘贴策略 JSON'); return; }
-
-  const pos = strat.positioning || strat;
-  const users = Array.isArray(pos.target_users) ? pos.target_users : [];
-  const pains = Array.isArray(pos.core_pain_points) ? pos.core_pain_points : [];
-  const stype = pos.type || strat.type || '_';
-
-  // 匹配用户 → 场景
-  const userScenes = [];
-  for (const u of users) {
-    for (const [k, v] of Object.entries(USER_SCENE_MAP)) {
-      if (u.includes(k) && !userScenes.includes(v)) { userScenes.push(v); break; }
-    }
-  }
-  const baseScene = userScenes[0] || USER_SCENE_MAP['办公'];
-
-  // 匹配痛点 → 氛围
-  const atmospheres = [];
-  for (const p of pains) {
-    for (const [k, v] of Object.entries(PAIN_ATMOSPHERE)) {
-      if (p.includes(k) && !atmospheres.includes(v)) { atmospheres.push(v); break; }
-    }
-  }
-
-  // 镜头序列
-  const camSeq = CAMERA_SEQUENCES[stype] || CAMERA_SEQUENCES['_'];
-  const n = Math.min(S.storyboard.shots.length, camSeq.length);
-
-  for (let i = 0; i < S.storyboard.shots.length; i++) {
-    if (i >= n) break;
-    const cam = camSeq[i];
-    const scene = i === 0 ? baseScene : (userScenes[i] || baseScene);
-    const atmo = atmospheres[i % atmospheres.length] || '';
-    S.storyboard.shots[i].scene_prompt = `${cam}。${scene}${atmo ? '，' + atmo : ''}`;
-  }
-  renderStoryboard();
-}
+// ── 场景描述：从口播脚本分镜数据中提取（AI 生成） ──
 
 // 时长钳位到 API 支持的 [4,12] 范围
 function snapDuration(v) {
   return Math.max(4, Math.min(12, Math.round(v)));
 }
 
+// ── 从口播脚本同步文案到分镜 ──
 function initStoryboard() {
   if (!S.storyboard || !S.storyboard.shots || !S.storyboard.shots.length) {
-    // 有口播分段数据时，按段数创建分镜并自动填充叠加文案
     const segs = S.vidScriptSegments;
     const n = segs && segs.length ? segs.length : 3;
     const shots = [];
     for (let i = 0; i < n; i++) {
-      const kws = (segs && segs[i] && segs[i].image_keywords) ? segs[i].image_keywords : [];
+      const seg = segs && segs[i];
       shots.push({
         image_url: '',
         first_frame_url: '',
         last_frame_url: '',
         scene_prompt: '',
-        duration_sec: segs && segs[i] ? snapDuration(Math.max(4, Math.min(12, Math.round(segs[i].estimated_duration)))) : 4,
-        overlay_text: kws.join(' / '),
+        voiceover: seg ? (seg.voiceover || '') : '',
+        duration_sec: (S._rawSegmentDurations && S._rawSegmentDurations[i])
+          ? Math.max(2, Math.min(12, Math.round(S._rawSegmentDurations[i])))
+          : seg ? snapDuration(Math.max(4, Math.min(12, Math.round(seg.estimated_duration)))) : 4,
       });
     }
     S.storyboard = { shots };
-    // 如果有策略数据，自动生成场景 Prompt
-    if (S.vidStrategyKey) {
-      setTimeout(() => generateScenePrompts(), 100);
-    }
   }
-}
-
-// 从口播脚本手动同步叠加文案
-function syncOverlayFromScript() {
-  const segs = S.vidScriptSegments;
-  if (!segs || !segs.length) { alert('请先生成口播脚本'); return; }
-  // 对齐段数：shot 不够就补，多了就裁
-  while (S.storyboard.shots.length < segs.length) {
-    S.storyboard.shots.push({ image_url: '', first_frame_url: '', last_frame_url: '', scene_prompt: '', duration_sec: 5, overlay_text: '' });
-  }
-  if (S.storyboard.shots.length > segs.length) {
-    S.storyboard.shots = S.storyboard.shots.slice(0, segs.length);
-  }
-  segs.forEach((seg, i) => {
-    const kws = seg.image_keywords || [];
-    S.storyboard.shots[i].overlay_text = kws.join(' / ');
-    S.storyboard.shots[i].duration_sec = snapDuration(Math.round(seg.estimated_duration));
-  });
-  renderStoryboard();
 }
 
 function getAvailableImages() {
   return S.uploadedImages || [];
 }
 
-// 首尾帧建议填充：点击图片填充第一个空的首帧 URL
-function fillFirstFrame(url) {
-  const ss = S.storyboard.shots;
-  for (let i = 0; i < ss.length; i++) {
-    if (!ss[i].first_frame_url && !ss[i].image_url) {
-      ss[i].first_frame_url = url;
-      ss[i].image_url = url;
-      renderStoryboard();
-      return;
-    }
-  }
-  alert('所有分镜首帧已填满');
-}
-function fillLastFrame(url) {
-  const ss = S.storyboard.shots;
-  for (let i = 0; i < ss.length; i++) {
-    if (!ss[i].last_frame_url) {
-      ss[i].last_frame_url = url;
-      renderStoryboard();
-      return;
-    }
-  }
-  alert('所有分镜尾帧已填满');
-}
-
 function renderStoryboard() {
   const el = document.getElementById('vidComposeParams');
-  const tplBtns = Object.keys(SCENE_TEMPLATES).map(k =>
-    `<button class="storyboard-tpl-btn" onclick="applySceneTemplate('${k}')">${k}</button>`
-  ).join('');
-  const syncBtn = S.vidScriptSegments && S.vidScriptSegments.length
-    ? `<button class="storyboard-tpl-btn" onclick="syncOverlayFromScript()" style="border-color:var(--accent);color:var(--accent);">📋 从口播导入</button>`
-    : '';
-  const stratBtn = S.vidStrategyKey
-    ? `<button class="storyboard-tpl-btn" onclick="generateScenePrompts()" style="border-color:#10b981;color:#10b981;">🧠 策略生成场景</button>`
-    : '';
-  // 已生成图片首尾帧建议
-  const imgSuggestionHtml = S._genImages.length
-    ? `<div style="margin:6px 0;padding:8px 10px;background:var(--bg);border:1px dashed var(--border);border-radius:6px;display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;">
-        <span style="font-size:11px;color:var(--text3);white-space:nowrap;line-height:32px;">🖼️ 首尾帧建议：</span>
-        ${S._genImages.map((img, idx) => `
-          <div style="text-align:center;max-width:60px;">
-            <img src="${esc(img.url)}" style="width:48px;height:48px;border-radius:6px;object-fit:cover;cursor:pointer;border:1px solid var(--border);" onclick="window.open('${esc(img.url)}')" onerror="this.style.display='none'" title="${esc(img.type||'')} #${img.position||''}">
-            <div style="display:flex;gap:2px;margin-top:2px;">
-              <button onclick="fillFirstFrame('${esc(img.url)}')" style="font-size:9px;padding:1px 4px;border-radius:3px;border:1px solid var(--accent);color:var(--accent);background:transparent;cursor:pointer;" title="设为第一个空首帧">首</button>
-              <button onclick="fillLastFrame('${esc(img.url)}')" style="font-size:9px;padding:1px 4px;border-radius:3px;border:1px solid var(--text3);color:var(--text3);background:transparent;cursor:pointer;" title="设为第一个空尾帧">尾</button>
-            </div>
-          </div>`).join('')}
-      </div>`
-    : '';
+  // 首尾帧填写提示
+  const imgSuggestionHtml = `<div style="margin:6px 0;padding:8px 10px;background:var(--bg);border:1px dashed var(--border);border-radius:6px;font-size:12px;color:var(--text2);line-height:1.6;">
+        💡 <b>首帧</b>：每个镜头贴同一张产品主图即可，AI 根据场景描述自动生成运镜动画<br>
+        💡 <b>尾帧</b>：一般留空，仅在需要精确控制镜头结束画面时填写
+      </div>`;
 
   let total = 0;
   const shotsHtml = S.storyboard.shots.map((s, i) => {
     total += (s.duration_sec >= 4 && s.duration_sec <= 12) ? s.duration_sec : 4;
+    // 合并标识
+    const isMerged = s._mergedFrom && s._mergedFrom > 1;
+    const mergeBadge = isMerged
+      ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;background:#fff3cd;color:#856404;border-radius:3px;font-size:11px;font-weight:600;">${s._mergedFrom} 段合并</span>`
+      : '';
+
     const selHtml = `<div style="display:flex;gap:8px;flex-direction:column;">
         <div style="display:flex;align-items:center;gap:4px;">
           <span style="font-size:11px;color:var(--text2);white-space:nowrap;">首帧</span>
@@ -1813,23 +1689,22 @@ function renderStoryboard() {
         </div>
       </div>`;
 
-    return `<div class="shot-card" id="shotCard${i}">
+    return `<div class="shot-card" id="shotCard${i}" style="${isMerged ? 'border-color:#ffc107;border-width:2px;' : ''}">
       <div class="shot-header">
-        <span class="shot-header-num">镜${i + 1}</span>
+        <span class="shot-header-num">镜${i + 1}${mergeBadge}</span>
         <button class="shot-header-del" onclick="removeShot(${i})" title="删除">×</button>
       </div>
       <div class="shot-body">
         <div class="shot-body-row">
           <div class="shot-field" style="flex:1">
             <span class="shot-lbl">场景描述</span>
-            <textarea class="shot-input" placeholder="如：白色办公桌，自然光，MacBook旁边…" onchange="S.storyboard.shots[${i}].scene_prompt=this.value" style="resize:vertical;min-height:60px;">${esc(s.scene_prompt)}</textarea>
+            <textarea class="shot-input" placeholder="如：白色办公桌，自然光，MacBook旁边…" onchange="S.storyboard.shots[${i}].scene_prompt=this.value" style="resize:vertical;min-height:56px;">${esc(s.scene_prompt)}</textarea>
           </div>
         </div>
         <div class="shot-body-row">
           <div class="shot-field" style="flex:1">
-            <span class="shot-lbl">叠加文案（可选）</span>
-            <input class="shot-input" placeholder="如：304不锈钢内胆" value="${esc(s.overlay_text)}"
-              onchange="S.storyboard.shots[${i}].overlay_text=this.value">
+            <span class="shot-lbl">口播台词</span>
+            <textarea class="shot-input" placeholder="此镜头台词…" onchange="S.storyboard.shots[${i}].voiceover=this.value" style="resize:vertical;min-height:44px;font-size:12px;color:var(--text2);">${esc(s.voiceover || '')}</textarea>
           </div>
         </div>
         <div class="shot-body-row">
@@ -1839,9 +1714,9 @@ function renderStoryboard() {
           </div>
           <div class="shot-field">
             <span class="shot-lbl">展示时长</span>
-            <div class="shot-dur-wrap">
+            <div class="shot-dur-wrap" style="display:flex;align-items:center;gap:4px;">
               <select id="shotDur${i}" onchange="S.storyboard.shots[${i}].duration_sec=parseInt(this.value);renderStoryboardFooter()" style="width:60px;height:32px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 4px;">
-                ${[4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}" ${s.duration_sec===v?'selected':''}>${v}s</option>`).join('')}
+                ${[4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}" ${Math.round(s.duration_sec)===v?'selected':''}>${v}s</option>`).join('')}
               </select>
             </div>
           </div>
@@ -1858,7 +1733,6 @@ function renderStoryboard() {
 
   el.innerHTML = `
     <div class="storyboard-wrap">
-      <div class="storyboard-templates">${tplBtns}${syncBtn}${stratBtn}</div>
       ${imgSuggestionHtml}
       <div class="storyboard-list" id="shotList">${shotsHtml}</div>
       <button class="btn-shot-add" onclick="addShot()">+ 添加分镜</button>
@@ -1877,7 +1751,7 @@ function renderStoryboardFooter() {
 }
 
 function addShot() {
-  S.storyboard.shots.push({ image_url: '', first_frame_url: '', last_frame_url: '', scene_prompt: '', duration_sec: 5, overlay_text: '' });
+  S.storyboard.shots.push({ image_url: '', first_frame_url: '', last_frame_url: '', scene_prompt: '', duration_sec: 5 });
   renderStoryboard();
 }
 
@@ -1895,15 +1769,6 @@ function updateClipSummary() {
   const done = shots.filter(s => s.clip_url).length;
   const total = shots.length;
   el.textContent = total ? `📹 分镜 clip: ${done}/${total} 已生成` : '';
-}
-
-function applySceneTemplate(key) {
-  const prompt = SCENE_TEMPLATES[key] || '';
-  S.storyboard.shots.forEach(s => {
-    if (prompt) s.scene_prompt = prompt;
-    else s.scene_prompt = '';
-  });
-  renderStoryboard();
 }
 
 // ── 独立生成单个分镜 ──
@@ -1964,39 +1829,32 @@ async function generateShot(i) {
       throw new Error(msg.slice(0, 200));
     }
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
-        const jsonStr = trimmed.slice(6);
-        try {
-          const data = JSON.parse(jsonStr);
-          if (data.stage && btnEl) {
-            btnEl.textContent = '⏳ ' + data.stage;
-          }
-          if (data.video_path) {
-            shot.clip_url = data.video_path;
-            shot.clip_status = 'done';
-            renderStoryboard();
-            return;
-          }
-          if (data.error) {
-            shot.clip_status = 'error';
-            if (btnEl) btnEl.textContent = '🔄 重试';
-            renderStoryboard();
-            return;
-          }
-        } catch (_) {}
-      }
-    }
+    const data = await res.json();
+    const taskId = data.data.task_id;
+    // 轮询进度
+    let pollTimer = setInterval(async () => {
+      try {
+        const r = await fetch(`${A8_API}/tasks/${taskId}`);
+        const p = await r.json();
+        const d = p?.data;
+        if (!d) return;
+        if (d.status === 'RUNNING' && d.result) {
+          if (btnEl) btnEl.textContent = '⏳ ' + (d.result.detail || d.result.stage || '处理中...');
+        }
+        if (d.status === 'SUCCESS') {
+          clearInterval(pollTimer);
+          shot.clip_url = d.result.video_path;
+          shot.clip_status = 'done';
+          renderStoryboard();
+        }
+        if (d.status === 'FAILURE') {
+          clearInterval(pollTimer);
+          shot.clip_status = 'error';
+          if (btnEl) btnEl.textContent = '🔄 重试';
+          renderStoryboard();
+        }
+      } catch (_) {}
+    }, 2000);
   } catch (e) {
     shot.clip_status = 'error';
     if (btnEl) btnEl.textContent = '🔄 重试';
@@ -2042,6 +1900,7 @@ async function doComposePremium() {
         aspect_ratio: spec,
         generate_audio: S.vidGenAudio || false,
         resolution: resolution,
+        segment_durations: S.vidSegmentDurations || [],
       }),
     });
     if (!res.ok) { const text = await res.text(); let msg = text; try { msg = JSON.parse(text).detail || msg; } catch(_) {} throw new Error(msg.slice(0, 200)); }
@@ -2167,6 +2026,26 @@ function removeUploadedAudio() {
   S.uploadedAudio = '';
   document.getElementById('vidUploadAudioCard').style.display = 'none';
   document.getElementById('vidAudioZone').style.display = '';
+}
+
+// 从配音设置一键导入音频和字幕到上传区
+function importTtsToCompose() {
+  if (!S.audioPath && !S.srtPath) { alert('请先在「配音设置」中生成配音'); return; }
+  if (S.audioPath) {
+    S.uploadedAudio = S.audioPath;
+    document.getElementById('vidAudioZone').style.display = 'none';
+    const audiocard = document.getElementById('vidUploadAudioCard');
+    audiocard.style.display = '';
+    audiocard.querySelector('.audio-card-name').textContent = '🎙️ ' + (S.audioPath.split('/').pop() || '配音音频');
+  }
+  if (S.srtPath) {
+    S.uploadedSrt = S.srtPath;
+    document.getElementById('vidSrtZone').style.display = 'none';
+    const srtcard = document.getElementById('vidUploadSrtCard');
+    srtcard.style.display = '';
+    srtcard.querySelector('.audio-card-name').textContent = '📝 ' + (S.srtPath.split('/').pop() || '字幕文件');
+  }
+  showS('vidComposeStatus', 'success', '已导入配音和字幕');
 }
 
 // SRT 上传

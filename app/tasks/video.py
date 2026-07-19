@@ -11,9 +11,18 @@ logger = logging.getLogger(__name__)
 
 
 def _progress_callback(task_id: str):
-    """返回 on_progress(pct, stage) 回调 → 写入 MySQL 供前端轮询"""
+    """返回 on_progress(pct, stage) 回调 → 写入 MySQL 供前端轮询
+
+    内置节流：最多每秒写入一次，避免编码期间每帧都触发 DB 事务。
+    """
+    import time
+    _last_ts = [0.0]  # 用列表包装实现闭包可变引用
 
     def on_progress(pct: float, stage: str):
+        now = time.monotonic()
+        if now - _last_ts[0] < 1.0:
+            return
+        _last_ts[0] = now
         try:
             with SyncSession() as db:
                 task = TaskRepo.get_by_id(db, task_id)
@@ -30,6 +39,8 @@ def _progress_callback(task_id: str):
     bind=True,
     name="compose_video",
     priority=3,
+    soft_time_limit=600,
+    time_limit=900,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
@@ -89,6 +100,8 @@ def compose_video_task(self, task_id: str):
     bind=True,
     name="compose_premium_video",
     priority=3,
+    soft_time_limit=600,
+    time_limit=900,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
@@ -113,6 +126,7 @@ def compose_premium_task(self, task_id: str):
             aspect_ratio=task.request_json.get("aspect_ratio", "9:16"),
             generate_audio=task.request_json.get("generate_audio", False),
             on_progress=_progress_callback(task_id),
+            segment_durations=task.request_json.get("segment_durations"),
         )
     except Exception as e:
         with SyncSession() as db:
@@ -149,6 +163,8 @@ def compose_premium_task(self, task_id: str):
     bind=True,
     name="generate_shot",
     priority=3,
+    soft_time_limit=300,
+    time_limit=420,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,

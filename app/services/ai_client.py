@@ -64,6 +64,21 @@ class AIClient:
             max_tokens=2048,
         )
 
+    async def generate_shot_scenes(self, *, voiceovers: list[str]) -> list[str]:
+        """根据每组口播文案生成镜头场景描述。"""
+        from app.services.prompt_templates import build_shot_scene_prompt
+        prompt = build_shot_scene_prompt(voiceovers)
+        result = await self._text_chat_to_json(
+            system_content="你是资深广告导演，专注电商短视频分镜设计，镜头描述精确到机位、焦段、运镜、布光。",
+            user_content=prompt,
+            temperature=0.6,
+            max_tokens=2048,
+        )
+        scenes = result.get("scenes", [])
+        if not scenes:
+            raise ValueError(f"AI 镜头场景生成返回空 scenes: {result}")
+        return scenes
+
     async def _text_chat_to_json(
         self,
         system_content: str,

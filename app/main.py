@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.database import async_engine, Base
 from app.core.exceptions import AppException
 from app.core.logging import setup_logging
+from app.core.paths import OUTPUT_DIR, IMAGE_DIR, AUDIO_DIR, VIDEO_DIR
 import app.models  # noqa: F401 — 注册 ORM 模型
 
 setup_logging()
@@ -52,8 +53,8 @@ app.include_router(images.router, prefix=settings.API_PREFIX)
 app.include_router(video.router, prefix=settings.API_PREFIX)
 
 # ── 静态文件 & 产物目录 ──
-for d in ("output/images", "output/audio", "output/videos"):
-    Path(d).mkdir(parents=True, exist_ok=True)
+for d in (IMAGE_DIR, AUDIO_DIR, VIDEO_DIR):
+    d.mkdir(parents=True, exist_ok=True)
 
-app.mount("/output", StaticFiles(directory="output"), name="output")
+app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
 app.mount("/static", StaticFiles(directory="static"), name="static")
