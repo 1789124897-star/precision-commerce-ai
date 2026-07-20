@@ -6,25 +6,25 @@ import re
 import shutil
 import time
 from pathlib import Path
-from typing import Optional, List
 
 import requests
 import yaml
 from DrissionPage import ChromiumOptions, ChromiumPage
 
 from app.core.config import settings
-from app.core.paths import IMAGE_DIR as OUTPUT_ROOT, SCRAPER_CONFIG
+from app.core.paths import IMAGE_DIR as OUTPUT_ROOT
+from app.core.paths import SCRAPER_CONFIG
 
 logger = logging.getLogger(__name__)
 
-with open(SCRAPER_CONFIG, "r", encoding="utf-8") as f:
+with open(SCRAPER_CONFIG, encoding="utf-8") as f:
     SCRAPER_CFG = yaml.safe_load(f)
 
 
 class ImageScraper:
 
     def __init__(self):
-        self.images: List[dict] = []
+        self.images: list[dict] = []
 
     def scrape(self, product_url: str, task_id: str) -> dict:
         task_dir = OUTPUT_ROOT / task_id
@@ -224,7 +224,7 @@ class ImageScraper:
             return False
 
     @staticmethod
-    def _extract_bg_url(style: Optional[str]) -> Optional[str]:
+    def _extract_bg_url(style: str | None) -> str | None:
         if not style:
             return None
         match = re.search(r'url\(["\']?(.*?)["\']?\)', style)

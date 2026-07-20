@@ -8,15 +8,15 @@ from app.core.database import get_db
 from app.core.utils import save_upload
 from app.models import Task
 from app.schemas.video import (
-    ComposeVideoRequest,
     ComposePremiumRequest,
+    ComposeVideoRequest,
     GenerateScriptRequest,
     GenerateShotRequest,
     GenerateTTSRequest,
 )
 from app.tasks.script_gen import script_gen_task
 from app.tasks.tts_gen import tts_gen_task
-from app.tasks.video import compose_video_task, compose_premium_task, generate_shot_task
+from app.tasks.video import compose_premium_task, compose_video_task, generate_shot_task
 
 router = APIRouter(prefix="/video", tags=["Video"])
 

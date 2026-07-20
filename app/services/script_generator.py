@@ -2,7 +2,6 @@
 import asyncio
 import json
 import logging
-from pathlib import Path
 
 from app.core.paths import SCRIPT_DIR as SCRIPTS_DIR
 from app.services.ai_client import AIClient

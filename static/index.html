@@ -565,6 +565,7 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
     <button class="nav-tab" data-tab="tabDirectStrategy">🎯 差异化策略</button>
     <button class="nav-tab" data-tab="tabImageGen">🖼️ AI生图</button>
     <button class="nav-tab" data-tab="tabVideo">🎬 AI视频</button>
+    <button class="nav-tab" data-tab="tabHistory">📋 任务历史</button>
   </div>
 </nav>
 
@@ -859,6 +860,57 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
     </div>
   </div>
 
+  <!-- ============ TAB: 任务历史 ============ -->
+  <div id="tabHistory" class="tab-content" style="display:none;">
+    <div class="card">
+      <div class="card-title"><span class="icon">📋</span>任务历史</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <select id="histType" onchange="loadHistory()" style="height:36px;padding:4px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);">
+          <option value="">全部类型</option>
+          <option value="scrape">📦 采集</option>
+          <option value="analysis">📊 分析</option>
+          <option value="strategy">🎯 策略</option>
+          <option value="image_gen">🖼️ 生图</option>
+          <option value="script_gen">📝 脚本</option>
+          <option value="tts_gen">🔊 配音</option>
+          <option value="video_compose">🎬 合成</option>
+          <option value="video_shot">🎥 分镜</option>
+        </select>
+        <select id="histStatus" onchange="loadHistory()" style="height:36px;padding:4px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);">
+          <option value="">全部状态</option>
+          <option value="PENDING">⏳ 等待中</option>
+          <option value="RUNNING">🔄 执行中</option>
+          <option value="SUCCESS">✅ 成功</option>
+          <option value="FAILURE">❌ 失败</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="loadHistory()" style="height:36px;">🔄 刷新</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportCSV()" style="height:36px;">📥 导出CSV</button>
+      </div>
+      <div class="status" id="histStatus"></div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="color:var(--text2);text-align:left;">
+              <th style="padding:6px 8px;white-space:nowrap;">时间</th>
+              <th style="padding:6px 8px;white-space:nowrap;">任务ID</th>
+              <th style="padding:6px 8px;white-space:nowrap;">类型</th>
+              <th style="padding:6px 8px;white-space:nowrap;">状态</th>
+              <th style="padding:6px 8px;">结果</th>
+            </tr>
+          </thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span id="histPageInfo" style="font-size:12px;color:var(--text2);"></span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" id="histPrev" onclick="prevPage()">← 上一页</button>
+          <button class="btn btn-ghost btn-sm" id="histNext" onclick="nextPage()">下一页 →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ====== LIGHTBOX ====== -->
@@ -916,6 +968,7 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(c => c.style.display = c.id === tabId ? '' : 'none');
   updateFlowHint();
   if (tabId === 'tabVideo') { }
+  if (tabId === 'tabHistory') { histPage = 0; loadHistory(); }
 }
 function updateFlowHint() {
   const steps = { tabScrape: 0, tabAnalysis: 1, tabDirectStrategy: 2, tabImageGen: 3, tabVideo: 4 };
@@ -2541,6 +2594,75 @@ async function downloadAllImages() {
     }
     return;
   }
+}
+
+// ══════════════════════════════════════════════════════
+//  任务历史
+// ══════════════════════════════════════════════════════
+let histPage = 0;
+const HIST_PS = 15;
+const TYPE_LABEL = { scrape:'📦 采集', analysis:'📊 分析', strategy:'🎯 策略', image_gen:'🖼️ 生图', script_gen:'📝 脚本', tts_gen:'🔊 配音', video_compose:'🎬 合成', video_shot:'🎥 分镜' };
+const STATUS_BADGE = { PENDING:'⏳', RUNNING:'🔄', SUCCESS:'✅', FAILURE:'❌' };
+const STATUS_COLOR = { PENDING:'#888', RUNNING:'#2196F3', SUCCESS:'#4CAF50', FAILURE:'#f44336' };
+
+async function loadHistory() {
+  const type = document.getElementById('histType').value;
+  const status = document.getElementById('histStatus').value;
+  const params = new URLSearchParams({ limit: HIST_PS, offset: histPage * HIST_PS });
+  if (type) params.set('type', type);
+  if (status) params.set('status', status);
+  try {
+    const res = await fetch(`${A8_API}/tasks?${params}`);
+    const payload = await res.json();
+    if (!payload.data) { showS('histStatus','error','无数据'); return; }
+    const d = payload.data;
+    document.getElementById('histBody').innerHTML = (d.tasks||[]).map(t => {
+      const preview = t.status === 'SUCCESS' ? _histPreview(t) : (t.error_message || '—');
+      return `<tr style="border-bottom:1px solid var(--border);color:var(--text);">
+        <td style="padding:6px 8px;white-space:nowrap;font-size:11px;color:var(--text2);">${(t.created_at||'').slice(0,16).replace('T',' ')}</td>
+        <td style="padding:6px 8px;white-space:nowrap;font-size:11px;font-family:monospace;color:var(--text3);">${(t.task_id||'').slice(0,8)}</td>
+        <td style="padding:6px 8px;white-space:nowrap;">${TYPE_LABEL[t.type]||t.type||'—'}</td>
+        <td style="padding:6px 8px;white-space:nowrap;font-weight:600;color:${STATUS_COLOR[t.status]||'#888'};">${STATUS_BADGE[t.status]||''} ${t.status}</td>
+        <td style="padding:6px 8px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;" title="${esc(preview)}">${esc(preview)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text3);">暂无任务记录</td></tr>';
+    const totalPages = Math.ceil((d.total||0) / HIST_PS);
+    document.getElementById('histPageInfo').textContent = `共 ${d.total} 条 · 第 ${histPage+1}/${totalPages||1} 页`;
+    document.getElementById('histPrev').disabled = histPage <= 0;
+    document.getElementById('histNext').disabled = histPage >= totalPages - 1;
+    showS('histStatus','');
+  } catch(e) {
+    showS('histStatus','error','加载失败: ' + e.message);
+  }
+}
+
+function _histPreview(t) {
+  try {
+    if (t.type === 'scrape') return `采集完成 · ${t.result_json?.image_count||0} 张`;
+    if (t.type === 'video_compose') return `视频已生成 · ${t.result_json?.duration_sec?.toFixed(1)||'?'}秒`;
+    if (t.type === 'script_gen') return '脚本已生成';
+    if (t.type === 'tts_gen') return '配音已生成';
+    if (t.type === 'analysis') return '分析完成';
+    if (t.type === 'strategy') return '策略已生成';
+    if (t.type === 'image_gen') return '图片已生成';
+    return '完成';
+  } catch(_) { return '完成'; }
+}
+
+function prevPage() { if (histPage > 0) { histPage--; loadHistory(); } }
+function nextPage() { histPage++; loadHistory(); }
+
+function exportCSV() {
+  const type = document.getElementById('histType').value;
+  const status = document.getElementById('histStatus').value;
+  const params = new URLSearchParams();
+  if (type) params.set('type', type);
+  if (status) params.set('status', status);
+  const a = document.createElement('a');
+  a.href = `${A8_API}/tasks/export?${params}`;
+  a.download = 'tasks_export.csv';
+  a.click();
+  showS('histStatus','success','导出中…');
 }
 
 // 初始化

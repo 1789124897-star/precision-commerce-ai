@@ -6,9 +6,9 @@ import random
 import subprocess
 import tempfile
 import uuid
+from collections.abc import Callable
 from math import ceil
 from pathlib import Path
-from typing import Callable, Optional
 
 import numpy as np
 from moviepy import (
@@ -20,7 +20,7 @@ from moviepy import (
     concatenate_videoclips,
     vfx,
 )
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from proglog import ProgressBarLogger
 
 from app.core.paths import OUTPUT_DIR, VIDEO_DIR
@@ -71,7 +71,7 @@ class VideoComposer:
         aspect_ratio: str = "9:16",
         transition: str = "fade",
         quality_check: bool = True,
-        on_progress: Optional[Callable[[float, str], None]] = None,
+        on_progress: Callable[[float, str], None] | None = None,
     ) -> dict:
         """
         合成 Ken Burns 视频。
@@ -83,7 +83,8 @@ class VideoComposer:
         Returns:
             {"video_path": str, "duration_sec": float, "quality": dict|None}
         """
-        report = lambda p, s: self._report(p, s, on_progress)
+        def report(p, s):
+            self._report(p, s, on_progress)
 
         # 解析分辨率
         w, h = self._parse_aspect(aspect_ratio)
@@ -218,7 +219,6 @@ class VideoComposer:
 
     def _cleanup_temp_files(self):
         """清理 MoviePy 遗留的临时文件（如 TEMP_MPY_wvf_snd.mp4）"""
-        import glob
         cwd = Path.cwd()
         for pattern in ["TEMP_MPY_*", "temp_mpy_*"]:
             for f in cwd.glob(pattern):
@@ -346,7 +346,7 @@ class VideoComposer:
         blocks = content.strip().split("\n\n")
         subtitles = []
         for block in blocks:
-            lines = [l.strip() for l in block.split("\n") if l.strip()]
+            lines = [line.strip() for line in block.split("\n") if line.strip()]
             if len(lines) < 3:
                 continue
             try:
@@ -398,7 +398,7 @@ class VideoComposer:
             return ImageFont.truetype(str(FONT_PATH), size)
         return ImageFont.load_default()
 
-    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> Optional[Image.Image]:
+    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> Image.Image | None:
         """渲染中文字幕图片：白字 + 黑阴影，无背景条"""
         margin = 30
         lines = []
@@ -442,8 +442,8 @@ class VideoComposer:
         task_id: str,
         aspect_ratio: str = "9:16",
         generate_audio: bool = False,
-        on_progress: Optional[Callable[[float, str], None]] = None,
-        segment_durations: Optional[list[float]] = None,
+        on_progress: Callable[[float, str], None] | None = None,
+        segment_durations: list[float] | None = None,
     ) -> dict:
         """精铺模式合成：按分镜列表生成场景展示视频。
 
@@ -452,7 +452,8 @@ class VideoComposer:
             images: 图片 URL 列表
             segment_durations: 每段口播的实际 TTS 时长（秒），非空时自动启动镜头组分组
         """
-        report = lambda p, s: self._report(p, s, on_progress)
+        def report(p, s):
+            self._report(p, s, on_progress)
 
         w, h = self._parse_aspect(aspect_ratio)
         report(0.0, f"加载 {len(images)} 张图片...")
@@ -518,7 +519,6 @@ class VideoComposer:
             pre_generated = group["shots"][0].get("clip_path", "") if group["shots"] else ""
 
             label = f"镜组{i+1}/{total_items}" if use_groups else f"分镜{i+1}/{total_items}"
-            detail = f"({dur}s" + (f", {segment_count}段口播)" if segment_count > 1 else ")")
             pct = 0.05 + (i / total_items) * 0.55
             report(pct, f"{label} {dur:.1f}s" + (f" ×{segment_count}段" if segment_count > 1 else ""))
 

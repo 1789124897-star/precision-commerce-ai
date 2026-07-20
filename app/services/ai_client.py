@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -133,7 +133,7 @@ class AIClient:
         url: str,
         payload: dict[str, Any],
         timeout: float = 180.0,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """发送 POST 请求，网络瞬态错误自动重试 3 次。"""
         for attempt in range(3):
@@ -161,7 +161,7 @@ class AIClient:
         self,
         *,
         specs: list[dict[str, Any]],
-        ref_image_data_urls: Optional[list[str]] = None,
+        ref_image_data_urls: list[str] | None = None,
         size: str = "2048x2048",
     ) -> list[dict[str, Any]]:
         """并发生图：每张图按 spec 提示词生成，参考图可选，Semaphore 限流。

@@ -3,8 +3,8 @@
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 import httpx
 
@@ -206,13 +206,14 @@ class SeedanceService:
         aspect_ratio: str = "9:16",
         duration_sec: float = 5.0,
         shot_index: int = 0,
-        on_progress: Optional[Callable] = None,
+        on_progress: Callable | None = None,
         generate_audio: bool = False,
         resolution: str = "720p",
     ) -> Path:
         """完整流程：上传图片 → 提交 Seedance → 轮询 → 下载 → 返回本地视频路径。"""
 
-        notify = lambda s, d="": self._notify(s, d, shot_index, on_progress)
+        def notify(s, d=""):
+            self._notify(s, d, shot_index, on_progress)
 
         notify("上传图片", f"{image_path.name}")
         public_url = await self.upload_to_public_url(image_path)
@@ -241,13 +242,14 @@ class SeedanceService:
         aspect_ratio: str = "9:16",
         duration_sec: float = 5.0,
         shot_index: int = 0,
-        on_progress: Optional[Callable] = None,
+        on_progress: Callable | None = None,
         generate_audio: bool = False,
         resolution: str = "720p",
     ) -> Path:
         """直接从公网 URL 调 Seedance（图生视频-首帧），跳过图床上传。"""
 
-        notify = lambda s, d="": self._notify(s, d, shot_index, on_progress)
+        def notify(s, d=""):
+            self._notify(s, d, shot_index, on_progress)
 
         notify("提交生成", f"url: {image_url[:50]}... prompt: {prompt[:50]}...")
         task_id = await self.submit_task(image_url, prompt, aspect_ratio, duration_sec, generate_audio=generate_audio, resolution=resolution)
@@ -272,13 +274,14 @@ class SeedanceService:
         aspect_ratio: str = "9:16",
         duration_sec: float = 5.0,
         shot_index: int = 0,
-        on_progress: Optional[Callable] = None,
+        on_progress: Callable | None = None,
         generate_audio: bool = False,
         resolution: str = "720p",
     ) -> Path:
         """纯文生视频：无参考图，仅靠 prompt 描述生成。"""
 
-        notify = lambda s, d="": self._notify(s, d, shot_index, on_progress)
+        def notify(s, d=""):
+            self._notify(s, d, shot_index, on_progress)
 
         notify("文生视频", f"prompt: {prompt[:60]}...")
         task_id = await self.submit_task(
@@ -308,13 +311,14 @@ class SeedanceService:
         aspect_ratio: str = "9:16",
         duration_sec: float = 5.0,
         shot_index: int = 0,
-        on_progress: Optional[Callable] = None,
+        on_progress: Callable | None = None,
         generate_audio: bool = False,
         resolution: str = "720p",
     ) -> Path:
         """图生视频-首尾帧：指定首帧和尾帧图片，AI 生成中间过渡视频。"""
 
-        notify = lambda s, d="": self._notify(s, d, shot_index, on_progress)
+        def notify(s, d=""):
+            self._notify(s, d, shot_index, on_progress)
 
         notify("首尾帧生成", f"prompt: {prompt[:50]}...")
         task_id = await self.submit_task(

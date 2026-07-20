@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from app.models import Task
 
 
-
 class TaskRepo:
     
     @staticmethod

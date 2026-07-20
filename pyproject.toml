@@ -1,0 +1,50 @@
+[tool.ruff]
+# 排除不需要检查的目录
+exclude = ["__pycache__", ".venv", "venv", "logs", "output", "migrations"]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# 启用哪些规则
+select = [
+    "E",   # pycodestyle 错误
+    "F",   # pyflakes（未使用变量、未定义符号等）
+    "I",   # isort（import 排序）
+    "UP",  # pyupgrade（现代语法建议）
+]
+
+# 忽略的规则
+ignore = [
+    "E501", # 行太长（由格式化工具处理）
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+exclude = ["__pycache__", ".venv", "venv", "tests/"]
+
+# 渐进式严格：先打开基础检查，后续逐步收紧
+disallow_untyped_defs = false
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "celery.*",
+    "drissionpage.*",
+    "edge_tts.*",
+    "moviepy.*",
+    "PIL.*",
+    "passlib.*",
+    "jose.*",
+    "aiomysql.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -1,18 +1,17 @@
 ﻿"""FastAPI 应用入口"""
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+import app.models  # noqa: F401 — 注册 ORM 模型
 from app.core.config import settings
-from app.core.database import async_engine, Base
+from app.core.database import Base, async_engine
 from app.core.exceptions import AppException
 from app.core.logging import setup_logging
-from app.core.paths import OUTPUT_DIR, IMAGE_DIR, AUDIO_DIR, VIDEO_DIR
-import app.models  # noqa: F401 — 注册 ORM 模型
+from app.core.paths import AUDIO_DIR, IMAGE_DIR, OUTPUT_DIR, VIDEO_DIR
 
 setup_logging()
 
@@ -43,7 +42,7 @@ async def app_exception_handler(request: Request, exc: AppException):
 
 # ── 路由注册 ──
 # 业务顺序：采集 → 分析 → 生图 → 视频
-from app.api.routes import health, scraper, analysis, tasks, images, video
+from app.api.routes import analysis, health, images, scraper, tasks, video  # noqa: E402 — 路由注册需放在 app 创建之后
 
 app.include_router(health.router, prefix=settings.API_PREFIX)
 app.include_router(scraper.router, prefix=settings.API_PREFIX)
