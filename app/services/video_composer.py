@@ -1,5 +1,4 @@
 """视频合成服务 — MoviePy Ken Burns + 字幕叠加 + Seedance AI 图生视频"""
-
 import asyncio
 import logging
 import random
@@ -9,6 +8,7 @@ import uuid
 from collections.abc import Callable
 from math import ceil
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from moviepy import (
@@ -71,7 +71,7 @@ class VideoComposer:
         aspect_ratio: str = "9:16",
         transition: str = "fade",
         quality_check: bool = True,
-        on_progress: Callable[[float, str], None] | None = None,
+        on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> dict:
         """
         合成 Ken Burns 视频。
@@ -398,7 +398,7 @@ class VideoComposer:
             return ImageFont.truetype(str(FONT_PATH), size)
         return ImageFont.load_default()
 
-    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> Image.Image | None:
+    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> Optional[Image.Image]:
         """渲染中文字幕图片：白字 + 黑阴影，无背景条"""
         margin = 30
         lines = []
@@ -442,8 +442,8 @@ class VideoComposer:
         task_id: str,
         aspect_ratio: str = "9:16",
         generate_audio: bool = False,
-        on_progress: Callable[[float, str], None] | None = None,
-        segment_durations: list[float] | None = None,
+        on_progress: Optional[Callable[[float, str], None]] = None,
+        segment_durations: Optional[list[float]] = None,
     ) -> dict:
         """精铺模式合成：按分镜列表生成场景展示视频。
 

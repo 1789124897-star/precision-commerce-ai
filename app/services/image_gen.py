@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
@@ -25,7 +25,7 @@ class ImageGenService:
     async def run(
         self,
         images_data: str = "",
-        ref_image_paths: list[str] | None = None,
+        ref_image_paths: Optional[list[str]] = None,
         size: str = "2048x2048",
         task_id: str = "",
     ) -> dict:

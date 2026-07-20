@@ -2,7 +2,7 @@
 # 排除不需要检查的目录
 exclude = ["__pycache__", ".venv", "venv", "logs", "output", "migrations"]
 line-length = 120
-target-version = "py311"
+target-version = "py39"
 
 [tool.ruff.lint]
 # 启用哪些规则
@@ -22,7 +22,7 @@ ignore = [
 known-first-party = ["app"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.9"
 ignore_missing_imports = true
 exclude = ["__pycache__", ".venv", "venv", "tests/"]
 

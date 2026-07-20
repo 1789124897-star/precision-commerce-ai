@@ -1,4 +1,5 @@
 """产品分析请求模型"""
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -14,5 +15,5 @@ class AnalysisSubmitRequest(BaseModel):
 class StrategyRequest(BaseModel):
     analysis: str = Field(min_length=1)
     system_prompt: str = ""
-    parent_task_id: str | None = None
+    parent_task_id: Optional[str] = None
 

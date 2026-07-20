@@ -1,5 +1,5 @@
 ﻿"""Video Pydantic 模型 —— 兼容前后端字段名"""
-
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -53,7 +53,7 @@ class ComposePremiumRequest(BaseModel):
     aspect_ratio: str = "9:16"
     generate_audio: bool = False
     resolution: str = "720p"
-    segment_durations: list[float] | None = None
+    segment_durations: Optional[list[float]] = None
 
 
 class GenerateShotRequest(BaseModel):

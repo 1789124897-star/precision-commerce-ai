@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import time
-from typing import Any
+from typing import Any, Optional
 
 from app.core.utils import image_to_data_url
 from app.services.ai_client import AIClient
@@ -24,7 +24,7 @@ class AnalysisService:
         price: str,
         extra: str = "",
         custom_prompt: str = "",
-        image_paths: list[str] | None = None,
+        image_paths: Optional[list[str]] = None,
     ) -> dict:
         """产品分析 → 返回 {"analysis": str, "product_name": str}"""
         image_data_urls = [image_to_data_url(url) for url in image_paths] if image_paths else []

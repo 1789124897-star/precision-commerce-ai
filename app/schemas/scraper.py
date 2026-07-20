@@ -1,4 +1,5 @@
 """爬虫模块请求/响应模型"""
+from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -29,7 +30,7 @@ class ImageItem(BaseModel):
     filename: str
     url: str
     category: str
-    label: str | None = None
+    label: Optional[str] = None
 
 
 class ScrapeImages(BaseModel):
