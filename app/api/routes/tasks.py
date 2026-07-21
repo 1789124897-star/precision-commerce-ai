@@ -113,8 +113,7 @@ async def cancel_task(task_id: str) -> dict:
         if task.celery_id:
             celery_app.control.revoke(task.celery_id, terminate=True)
 
-        task.status = "FAILURE"
-        task.error_message = "用户手动取消"
+        TaskRepo.set_failure(db, task_id, "用户手动取消")
         db.commit()
 
     return {"data": {"task_id": task_id, "status": "FAILURE"}, "message": "已取消"}

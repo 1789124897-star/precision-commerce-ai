@@ -1,4 +1,5 @@
 """Task 模型"""
+import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -12,11 +13,16 @@ TASK_TYPES = ["scrape", "analysis", "strategy", "image_gen", "script_gen", "tts"
 TASK_STATUSES = ["PENDING", "RUNNING", "SUCCESS", "FAILURE"]
 
 
+def gen_task_id() -> str:
+    """生成 32 位 UUID，供 Service 层调用。"""
+    return uuid.uuid4().hex
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    task_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    task_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True, default=gen_task_id)
     parent_task_id: Mapped[Optional[str]] = mapped_column(String(32), default=None, index=True)
     celery_id: Mapped[Optional[str]] = mapped_column(String(64), default=None)
     type: Mapped[str] = mapped_column(String(20), nullable=False)

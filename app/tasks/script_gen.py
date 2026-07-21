@@ -1,4 +1,4 @@
-"""脚本生成 Celery 任务 — 从 video.py 同步调用收敛为异步管道"""
+"""脚本生成 Celery 任务"""
 import logging
 
 from app.core.celery_app import celery_app
@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
     bind=True,
     name="generate_script",
     priority=9,
+    soft_time_limit=180,
+    time_limit=240,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
@@ -22,30 +24,24 @@ logger = logging.getLogger(__name__)
 def script_gen_task(self, task_id: str):
     logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
-        task = TaskRepo.get_by_id(db, task_id)
-        if task:
-            task.status = "RUNNING"
-            task.celery_id = self.request.id
-            db.commit()
+        task = TaskRepo.set_running(db, task_id, self.request.id)
+        if not task:
+            raise ValueError(f"任务不存在: {task_id}")
+        request_json = dict(task.request_json or {})
+        db.commit()
 
     try:
-        result = ScriptGenerator().run_sync(**task.request_json)
+        result = ScriptGenerator().run_sync(**request_json)
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
-            task = TaskRepo.get_by_id(db, task_id)
-            if task:
-                task.status = "FAILURE"
-                task.error_message = str(e)
-                db.commit()
+            TaskRepo.set_failure(db, task_id, str(e))
+            db.commit()
         raise
 
     with SyncSession() as db:
-        task = TaskRepo.get_by_id(db, task_id)
-        if task:
-            task.status = "SUCCESS"
-            task.result_json = result
-            db.commit()
+        TaskRepo.set_success(db, task_id, result)
+        db.commit()
 
     logger.info("完成 task_id=%s", task_id)
     return {"task_id": task_id, "status": "SUCCESS"}

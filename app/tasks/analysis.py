@@ -25,40 +25,36 @@ logger = logging.getLogger(__name__)
 def analyze_product_task(self, task_id: str):
     logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
-        task = TaskRepo.get_by_id(db, task_id)
-        if task:
-            task.status = "RUNNING"
-            task.celery_id = self.request.id
-            db.commit()
+        task = TaskRepo.set_running(db, task_id, self.request.id)
+        if not task:
+            raise ValueError(f"任务不存在: {task_id}")
+        request_json = dict(task.request_json or {})
+        db.commit()
 
     try:
-        result = AnalysisService().run_sync(**task.request_json)
+        result = AnalysisService().run_sync(**request_json)
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
-            task = TaskRepo.get_by_id(db, task_id)
-            if task:
-                task.status = "FAILURE"
-                task.error_message = str(e)
-                db.commit()
+            TaskRepo.set_failure(db, task_id, str(e))
+            db.commit()
         raise
 
     with SyncSession() as db:
-        task = TaskRepo.get_by_id(db, task_id)
+        task = TaskRepo.set_success(db, task_id, result)
         if task:
-            task.status = "SUCCESS"
-            task.result_json = result
-        kwargs = task.request_json or {}
-        analysis = Analysis(
-            task_id=task_id,
-            product_name=kwargs.get("name", result.get("product_name", "")),
-            product_function=kwargs.get("function", ""),
-            price_range=kwargs.get("price", ""),
-            extra_info=kwargs.get("extra", ""),
-            image_paths=str(kwargs.get("image_paths", [])),
-            result_text=result.get("analysis", ""),
-        )
-        db.add(analysis)
+            kwargs = task.request_json or {}
+            db.add(
+                Analysis(
+                    task_id=task_id,
+                    product_name=kwargs.get("name", result.get("product_name", "")),
+                    product_function=kwargs.get("function", ""),
+                    price_range=kwargs.get("price", ""),
+                    extra_info=kwargs.get("extra", ""),
+                    image_paths=str(kwargs.get("image_paths", [])),
+                    result_text=result.get("analysis", ""),
+                )
+            )
         db.commit()
 
     logger.info("完成 task_id=%s", task_id)

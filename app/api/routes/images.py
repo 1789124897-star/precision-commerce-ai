@@ -1,6 +1,4 @@
 """生图路由"""
-import uuid
-
 import httpx
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import Response
@@ -8,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.utils import save_upload
-from app.models import Task
+from app.services.task_service import TaskService
 from app.tasks.image_gen import image_gen_task
 
 router = APIRouter(prefix="/images", tags=["Images"])
@@ -35,21 +33,14 @@ async def submit_image(
 ) -> dict:
     ref_image_paths = [save_upload(f, "image_gen") for f in ref_images if f]
 
-    task_id = uuid.uuid4().hex[:8]
-    task = Task(
-        task_id=task_id,
+    task = await TaskService.create_and_dispatch(
+        db,
         type="image_gen",
-        status="PENDING",
         request_json={
             "images_data": images_data,
             "ref_image_paths": ref_image_paths,
             "size": size,
-            "task_id": task_id,
         },
+        celery_task=image_gen_task,
     )
-    db.add(task)
-    await db.commit()
-
-    image_gen_task.delay(task_id=task_id)
-
-    return {"data": {"task_id": task_id, "task_type": "image_generation"}, "message": "ok"}
+    return {"data": {"task_id": task.task_id, "task_type": "image_generation"}, "message": "ok"}

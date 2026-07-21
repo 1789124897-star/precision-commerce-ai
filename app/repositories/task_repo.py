@@ -1,4 +1,6 @@
+"""Task 数据访问 — API 用异步，Celery Worker 用同步。"""
 from datetime import datetime
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,19 +10,88 @@ from app.models import Task
 
 
 class TaskRepo:
-    
+    """Celery Worker 侧同步访问。"""
+
     @staticmethod
-    def get_by_id(db: Session, task_id: str):
+    def get_by_id(db: Session, task_id: str) -> Optional[Task]:
         return db.query(Task).filter_by(task_id=task_id).first()
 
     @staticmethod
-    def find_stale(db: Session, cutoff: datetime):
-        return db.query(Task).filter(Task.status == "RUNNING", Task.updated_at < cutoff).all()
+    def find_stale(db: Session, cutoff: datetime) -> list[Task]:
+        return (
+            db.query(Task)
+            .filter(Task.status == "RUNNING", Task.updated_at < cutoff)
+            .all()
+        )
+
+    @staticmethod
+    def set_running(db: Session, task_id: str, celery_id: str) -> Optional[Task]:
+        task = TaskRepo.get_by_id(db, task_id)
+        if not task:
+            return None
+        task.status = "RUNNING"
+        task.celery_id = celery_id
+        return task
+
+    @staticmethod
+    def set_success(db: Session, task_id: str, result_json: Any) -> Optional[Task]:
+        task = TaskRepo.get_by_id(db, task_id)
+        if not task:
+            return None
+        task.status = "SUCCESS"
+        task.result_json = result_json
+        return task
+
+    @staticmethod
+    def set_failure(db: Session, task_id: str, error_message: str) -> Optional[Task]:
+        task = TaskRepo.get_by_id(db, task_id)
+        if not task:
+            return None
+        task.status = "FAILURE"
+        task.error_message = error_message
+        return task
+
+    @staticmethod
+    def set_result(db: Session, task_id: str, result_json: Any) -> Optional[Task]:
+        """更新 result_json（进度轮询等），不改 status。"""
+        task = TaskRepo.get_by_id(db, task_id)
+        if not task:
+            return None
+        task.result_json = result_json
+        return task
+
+    @staticmethod
+    def mark_stale_failed(db: Session, tasks: list[Task], error_message: str) -> int:
+        for task in tasks:
+            task.status = "FAILURE"
+            task.error_message = error_message
+        return len(tasks)
 
 
 class AsyncTaskRepo:
+    """FastAPI 侧异步访问。"""
 
     @staticmethod
-    async def get_by_id(db: AsyncSession, task_id: str):
+    async def get_by_id(db: AsyncSession, task_id: str) -> Optional[Task]:
         result = await db.execute(select(Task).filter_by(task_id=task_id))
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def create_pending(
+        db: AsyncSession,
+        *,
+        task_id: str,
+        type: str,
+        request_json: dict,
+        parent_task_id: Optional[str] = None,
+    ) -> Task:
+        task = Task(
+            task_id=task_id,
+            parent_task_id=parent_task_id,
+            type=type,
+            status="PENDING",
+            request_json=request_json,
+        )
+        db.add(task)
+        await db.commit()
+        return task
