@@ -18,5 +18,5 @@ SCRIPT_DIR = OUTPUT_DIR / "scripts"
 
 SCRAPER_CONFIG = _PROJECT_ROOT / "app" / "config" / "scraper_config.yaml"
 
-for dir in (VIDEO_DIR, AUDIO_DIR, IMAGE_DIR, UPLOAD_DIR, SCRIPT_DIR):
-    dir.mkdir(parents=True, exist_ok=True)
+for d in (VIDEO_DIR, AUDIO_DIR, IMAGE_DIR, UPLOAD_DIR, SCRIPT_DIR):
+    d.mkdir(parents=True, exist_ok=True)

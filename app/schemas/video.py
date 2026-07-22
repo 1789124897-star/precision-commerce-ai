@@ -14,7 +14,6 @@ class GenerateScriptRequest(BaseModel):
 class GenerateTTSRequest(BaseModel):
     script_path: str = ""
     text: str = ""
-    task_id: str = ""
     voice: str = ""
     rate: str = ""
 
@@ -24,12 +23,9 @@ class ComposeVideoRequest(BaseModel):
     images: list[str]
     audio_path: str
     srt_path: str
-    task_id: str = ""
-    mode: str = "fast"
     aspect_ratio: str = "9:16"
     quality_check: bool = True
     transition: str = ""
-    ai_style: str = ""
 
 
 class ShotSchema(BaseModel):
@@ -49,7 +45,6 @@ class ComposePremiumRequest(BaseModel):
     images: list[str]
     audio_path: str
     srt_path: str = ""
-    task_id: str = ""
     aspect_ratio: str = "9:16"
     generate_audio: bool = False
     resolution: str = "720p"

@@ -99,8 +99,8 @@ async def compose_premium(body: ComposePremiumRequest, db: AsyncSession = Depend
 async def generate_shot(body: GenerateShotRequest, db: AsyncSession = Depends(get_db)) -> dict:
     task = await TaskService.create_and_dispatch(
         db,
-        type="video_shot",
+        type="shot_gen",
         request_json=body.model_dump(),
         celery_task=generate_shot_task,
     )
-    return {"data": {"task_id": task.task_id, "task_type": "video_shot"}, "message": "ok"}
+    return {"data": {"task_id": task.task_id, "task_type": "shot_gen"}, "message": "ok"}

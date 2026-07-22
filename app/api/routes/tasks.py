@@ -19,16 +19,16 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 async def list_tasks(
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    type: str = Query("", description="任务类型筛选"),
+    task_type: str = Query("", description="任务类型筛选"),
     status: str = Query("", description="状态筛选"),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """任务历史：分页 + 筛选 + 总数"""
     base = select(Task)
     count_base = select(func.count(Task.id))
-    if type:
-        base = base.where(Task.type == type)
-        count_base = count_base.where(Task.type == type)
+    if task_type:
+        base = base.where(Task.type == task_type)
+        count_base = count_base.where(Task.type == task_type)
     if status:
         base = base.where(Task.status == status)
         count_base = count_base.where(Task.status == status)
@@ -62,14 +62,14 @@ async def list_tasks(
 
 @router.get("/export")
 async def export_tasks(
-    type: str = Query("", description="任务类型筛选"),
+    task_type: str = Query("", description="任务类型筛选"),
     status: str = Query("", description="状态筛选"),
     db: AsyncSession = Depends(get_db),
 ):
     """导出任务历史为 CSV"""
     base = select(Task).order_by(desc(Task.id))
-    if type:
-        base = base.where(Task.type == type)
+    if task_type:
+        base = base.where(Task.type == task_type)
     if status:
         base = base.where(Task.status == status)
 

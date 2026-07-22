@@ -1,6 +1,8 @@
 ﻿"""FastAPI 应用入口"""
 from contextlib import asynccontextmanager
 
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,7 +10,6 @@ from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401 — 注册 ORM 模型
 from app.core.config import settings
-from app.core.database import Base, async_engine
 from app.core.exceptions import AppException
 from app.core.logging import setup_logging
 from app.core.paths import AUDIO_DIR, IMAGE_DIR, OUTPUT_DIR, VIDEO_DIR
@@ -18,8 +19,8 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
     yield
 
 
