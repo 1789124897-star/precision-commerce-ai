@@ -109,7 +109,7 @@ def compose_video_task(self, task_id: str):
     max_retries=3,
     retry_jitter=True,
 )
-def compose_premium_task(self, task_id: str):
+def compose_premium_video_task(self, task_id: str):
     logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)

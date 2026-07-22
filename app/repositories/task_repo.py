@@ -81,14 +81,14 @@ class AsyncTaskRepo:
         db: AsyncSession,
         *,
         task_id: str,
-        type: str,
+        task_type: str,
         request_json: dict,
         parent_task_id: Optional[str] = None,
     ) -> Task:
         task = Task(
             task_id=task_id,
             parent_task_id=parent_task_id,
-            type=type,
+            type=task_type,
             status="PENDING",
             request_json=request_json,
         )

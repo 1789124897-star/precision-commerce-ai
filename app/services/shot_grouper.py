@@ -12,16 +12,16 @@ from math import ceil
 
 logger = logging.getLogger(__name__)
 
-MIN_DUR = 4.0   # Seedance 最短支持
-MAX_DUR = 12.0  # Seedance 最长支持
+MIN_DURATION = 4.0   # Seedance 最短支持
+MAX_DURATION = 12.0  # Seedance 最长支持
 
 
 class ShotGrouper:
     """将原始分镜按实际 TTS 时长合并为镜头组。"""
 
-    def __init__(self, min_dur: float = MIN_DUR, max_dur: float = MAX_DUR):
-        self.min_dur = min_dur
-        self.max_dur = max_dur
+    def __init__(self, min_duration: float = MIN_DURATION, max_duration: float = MAX_DURATION):
+        self.min_duration = min_duration
+        self.max_duration = max_duration
 
     def group(self, shots: list[dict], segment_durations: list[float]) -> list[dict]:
         """贪心分组：从左到右累加 TTS 时长，≥ min_dur 时封组。
@@ -59,11 +59,11 @@ class ShotGrouper:
             if not buf_shots:
                 return
 
-            tts_total = buf_dur
+            tts_total = buf_duration
             # ceil 取整 → 画面永远不比音频短
-            seedance_dur = int(ceil(max(tts_total, self.min_dur)))
+            seedance_duration = int(ceil(max(tts_total, self.min_duration)))
             # 但不超过 max_dur
-            seedance_dur = min(seedance_dur, int(self.max_dur))
+            seedance_duration = min(seedance_duration, int(self.max_duration))
 
             first = buf_shots[0]
             last = buf_shots[-1]
@@ -73,7 +73,7 @@ class ShotGrouper:
                 groups.append({
                     "shots": list(buf_shots),
                     "tts_duration": round(tts_total, 1),
-                    "seedance_dur": seedance_dur,
+                    "seedance_dur": seedance_duration,
                     "image_url": first.get("image_url", ""),
                     "first_frame_url": first.get("first_frame_url", "") or first.get("image_url", ""),
                     "last_frame_url": "",
@@ -91,7 +91,7 @@ class ShotGrouper:
                 groups.append({
                     "shots": list(buf_shots),
                     "tts_duration": round(tts_total, 1),
-                    "seedance_dur": seedance_dur,
+                    "seedance_dur": seedance_duration,
                     "image_url": "",
                     "first_frame_url": first_url,
                     "last_frame_url": last_url,
@@ -101,42 +101,42 @@ class ShotGrouper:
 
             logger.info(
                 f"镜头组封组: {len(buf_shots)} 段口播, "
-                f"TTS {tts_total:.1f}s → Seedance {seedance_dur}s "
+                f"TTS {tts_total:.1f}s → Seedance {seedance_duration}s "
                 f"(mode={groups[-1]['mode']})"
             )
 
-        for i, (shot, dur) in enumerate(zip(shots, segment_durations)):
-            # 如果当前段本身就 ≥ max_dur，先封之前的组再单独成组
-            if dur >= self.max_dur:
+        for i, (shot, duration) in enumerate(zip(shots, segment_durations)):
+            # 如果当前段本身就 ≥ max_duration，先封之前的组再单独成组
+            if duration >= self.max_duration:
                 seal_group()
                 buf_shots = [shot]
-                buf_dur = dur
-                # 长段需要拆分：这里简单处理，截断到 max_dur
+                buf_duration = duration
+                # 长段需要拆分：这里简单处理，截断到 max_duration
                 # 更精细的拆分可后续扩展
                 seal_group()
                 buf_shots = []
-                buf_dur = 0.0
+                buf_duration = 0.0
                 continue
 
-            # 如果加入当前段会超 max_dur，先封组再开新组
-            if buf_dur + dur > self.max_dur and buf_dur >= self.min_dur:
+            # 如果加入当前段会超 max_duration，先封组再开新组
+            if buf_duration + duration > self.max_duration and buf_duration >= self.min_duration:
                 seal_group()
                 buf_shots = []
-                buf_dur = 0.0
+                buf_duration = 0.0
 
             buf_shots.append(shot)
-            buf_dur += dur
+            buf_duration += duration
 
-            # 累计 ≥ min_dur → 封组
-            if buf_dur >= self.min_dur:
-                # 如果下一段加上去不超 max_dur，可以等一等
+            # 累计 ≥ min_duration → 封组
+            if buf_duration >= self.min_duration:
+                # 如果下一段加上去不超 max_duration，可以等一等
                 # 但如果下一段加上去正好凑整，可以贪一下
-                # 简单策略：≥ min_dur 就封，保持节奏
+                # 简单策略：≥ min_duration 就封，保持节奏
                 seal_group()
                 buf_shots = []
-                buf_dur = 0.0
+                buf_duration = 0.0
 
-        # 尾部残留：强制封组（扩展到 min_dur）
+        # 尾部残留：强制封组（扩展到 min_duration）
         if buf_shots:
             seal_group()
 

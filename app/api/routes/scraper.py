@@ -17,7 +17,7 @@ router = APIRouter(prefix="/scraper", tags=["Scraper"])
 async def do_scrape(payload: ScrapeRequest, db: AsyncSession = Depends(get_db)):
     task = await TaskService.create_and_dispatch(
         db,
-        type="scrape",
+        task_type="scrape",
         request_json={"url": payload.url},
         celery_task=scrape_product_task,
     )

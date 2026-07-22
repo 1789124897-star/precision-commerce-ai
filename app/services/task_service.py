@@ -14,7 +14,7 @@ class TaskService:
     async def create_and_dispatch(
         db: AsyncSession,
         *,
-        type: str,
+        task_type: str,
         request_json: dict[str, Any],
         celery_task: Any,
         parent_task_id: Optional[str] = None,
@@ -22,7 +22,7 @@ class TaskService:
         task = await AsyncTaskRepo.create_pending(
             db,
             task_id=gen_task_id(),
-            type=type,
+            task_type=task_type,
             request_json=request_json,
             parent_task_id=parent_task_id,
         )

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.utils import save_upload
 from app.services.task_service import TaskService
-from app.tasks.image_gen import image_gen_task
+from app.tasks.image_gen import generate_images_task
 
 router = APIRouter(prefix="/images", tags=["Images"])
 
@@ -35,12 +35,12 @@ async def submit_image(
 
     task = await TaskService.create_and_dispatch(
         db,
-        type="image_gen",
+        task_type="image_gen",
         request_json={
             "images_data": images_data,
             "ref_image_paths": ref_image_paths,
             "size": size,
         },
-        celery_task=image_gen_task,
+        celery_task=generate_images_task,
     )
     return {"data": {"task_id": task.task_id, "task_type": "image_generation"}, "message": "ok"}

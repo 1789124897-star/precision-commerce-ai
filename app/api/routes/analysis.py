@@ -7,7 +7,7 @@ from app.core.utils import save_upload
 from app.schemas.analysis import AnalysisSubmitRequest, StrategyRequest
 from app.services.task_service import TaskService
 from app.tasks.analysis import analyze_product_task
-from app.tasks.strategy import strategy_task
+from app.tasks.strategy import generate_strategies_task
 
 router = APIRouter(prefix="/analysis", tags=["Analysis"])
 
@@ -33,7 +33,7 @@ async def submit_analysis(
 
     task = await TaskService.create_and_dispatch(
         db,
-        type="analysis",
+        task_type="analysis",
         request_json={**body.model_dump(), "image_paths": image_paths},
         celery_task=analyze_product_task,
     )
@@ -44,9 +44,9 @@ async def submit_analysis(
 async def do_submit_strategies(body: StrategyRequest, db: AsyncSession = Depends(get_db)) -> dict:
     task = await TaskService.create_and_dispatch(
         db,
-        type="strategy",
+        task_type="strategy",
         request_json={"analysis": body.analysis, "system_prompt": body.system_prompt},
-        celery_task=strategy_task,
+        celery_task=generate_strategies_task,
         parent_task_id=body.parent_task_id,
     )
     return {"data": {"task_id": task.task_id, "task_type": "strategy"}, "message": "ok"}

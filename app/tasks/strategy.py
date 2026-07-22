@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
     max_retries=3,
     retry_jitter=True,
 )
-def strategy_task(self, task_id: str):
+def generate_strategies_task(self, task_id: str):
     logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
@@ -44,12 +44,12 @@ def strategy_task(self, task_id: str):
     with SyncSession() as db:
         task = TaskRepo.set_success(db, task_id, result)
         if task:
-            for stype, text in result.get("strategies", {}).items():
+            for strategy_type, text in result.get("strategies", {}).items():
                 db.add(
                     Strategy(
                         task_id=task_id,
                         analysis_task_id=parent_task_id,
-                        strategy_type=stype,
+                        strategy_type=strategy_type,
                         result_text=text,
                     )
                 )

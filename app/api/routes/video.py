@@ -12,9 +12,9 @@ from app.schemas.video import (
     GenerateTTSRequest,
 )
 from app.services.task_service import TaskService
-from app.tasks.script_gen import script_gen_task
-from app.tasks.tts_gen import tts_gen_task
-from app.tasks.video import compose_premium_task, compose_video_task, generate_shot_task
+from app.tasks.script_gen import generate_script_task
+from app.tasks.tts_gen import generate_tts_task
+from app.tasks.video import compose_premium_video_task, compose_video_task, generate_shot_task
 
 router = APIRouter(prefix="/video", tags=["Video"])
 
@@ -23,14 +23,14 @@ router = APIRouter(prefix="/video", tags=["Video"])
 async def generate_script(body: GenerateScriptRequest, db: AsyncSession = Depends(get_db)) -> dict:
     task = await TaskService.create_and_dispatch(
         db,
-        type="script_gen",
+        task_type="script_gen",
         request_json={
             "content": body.content,
             "target_segments": body.segments,
             "system_prompt": body.system_prompt,
             "tts_rate": body.tts_rate,
         },
-        celery_task=script_gen_task,
+        celery_task=generate_script_task,
     )
     return {"data": {"task_id": task.task_id, "task_type": "script_generation"}, "message": "ok"}
 
@@ -39,14 +39,14 @@ async def generate_script(body: GenerateScriptRequest, db: AsyncSession = Depend
 async def generate_tts(body: GenerateTTSRequest, db: AsyncSession = Depends(get_db)) -> dict:
     task = await TaskService.create_and_dispatch(
         db,
-        type="tts_gen",
+        task_type="tts_gen",
         request_json={
             "script_path": body.script_path,
             "text": body.text,
             "voice": body.voice,
             "rate": body.rate,
         },
-        celery_task=tts_gen_task,
+        celery_task=generate_tts_task,
     )
     return {"data": {"task_id": task.task_id, "task_type": "tts_generation"}, "message": "ok"}
 
@@ -70,7 +70,7 @@ async def upload_srt(file: UploadFile = File(...)) -> dict:
 async def compose_video(body: ComposeVideoRequest, db: AsyncSession = Depends(get_db)) -> dict:
     task = await TaskService.create_and_dispatch(
         db,
-        type="video_compose",
+        task_type="video_compose",
         request_json={
             "image_urls": body.images,
             "audio_path": body.audio_path,
@@ -88,9 +88,9 @@ async def compose_video(body: ComposeVideoRequest, db: AsyncSession = Depends(ge
 async def compose_premium(body: ComposePremiumRequest, db: AsyncSession = Depends(get_db)) -> dict:
     task = await TaskService.create_and_dispatch(
         db,
-        type="video_compose",
+        task_type="video_compose",
         request_json=body.model_dump(),
-        celery_task=compose_premium_task,
+        celery_task=compose_premium_video_task,
     )
     return {"data": {"task_id": task.task_id, "task_type": "video_compose"}, "message": "ok"}
 

@@ -1,5 +1,5 @@
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 )
 def cleanup_stale_tasks(self):
     with SyncSession() as db:
-        cutoff = datetime.now(UTC) - timedelta(hours=2)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
         stale = TaskRepo.find_stale(db, cutoff)
         # 重新绑定到当前 session 再改状态（find 已在同 session）
         count = TaskRepo.mark_stale_failed(

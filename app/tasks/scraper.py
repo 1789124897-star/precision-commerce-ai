@@ -32,6 +32,9 @@ def scrape_product_task(self, task_id: str):
         db.commit()
 
     url = request_json.get("url", "")
+    # 去掉 1688 追踪参数，避免 URL 过长超出数据库字段
+    if "?" in url:
+        url = url.split("?")[0]
     try:
         result = ImageScraper().scrape(url, task_id)
     except Exception as e:

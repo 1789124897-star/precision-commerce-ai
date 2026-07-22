@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
     max_retries=3,
     retry_jitter=True,
 )
-def script_gen_task(self, task_id: str):
+def generate_script_task(self, task_id: str):
     logger.info("开始 task_id=%s", task_id)
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
