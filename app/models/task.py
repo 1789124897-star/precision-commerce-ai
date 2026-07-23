@@ -14,7 +14,7 @@ TASK_STATUSES = ["PENDING", "RUNNING", "SUCCESS", "FAILURE"]
 
 
 def gen_task_id() -> str:
-    """生成 32 位 UUID，供 Service 层调用。"""
+    
     return uuid.uuid4().hex
 
 
