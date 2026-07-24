@@ -1,0 +1,137 @@
+/* ============================================================
+   Warm Paper Theme — inspired by git1 competitor-analysis
+   在 index.html 中 <link> 引入即可覆盖原色系
+   ============================================================ */
+:root {
+  --paper: #f7f1e7;
+  --paper-strong: #efe4d2;
+  --ink: #2b211a;
+  --muted: #6d5b4b;
+  --accent: #9f5f36;
+  --accent-rgb: 159, 95, 54;
+  --line: rgba(43, 33, 26, 0.14);
+  --card: rgba(255, 251, 245, 0.96);
+  --shadow: 0 24px 60px rgba(79, 47, 25, 0.10);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 24px;
+
+  /* 覆盖原项目变量 */
+  --bg: #fbf7f1;
+  --text: var(--ink);
+  --text2: var(--muted);
+  --text3: #a8987e;
+  --border: var(--line);
+  --green: #2d7a4e;
+  --orange: #c7693a;
+  --red: #c7493a;
+
+  --safe: env(safe-area-inset-bottom, 16px);
+}
+
+/* ---- 纸质感背景 ---- */
+body {
+  font-family: "Georgia", "Noto Serif SC", "STSong", "SimSun", serif;
+  background:
+    radial-gradient(circle at top left,  rgba(214,165,118,0.26), transparent 34%),
+    radial-gradient(circle at top right, rgba(186,122,76,0.14),  transparent 30%),
+    linear-gradient(180deg, #fbf7f1 0%, #f4ede2 100%);
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(43,33,26,0.025) 1px, transparent 1px);
+  background-size: 100% 34px;
+  opacity: 0.45;
+  z-index: 9999;
+}
+
+/* ---- 导航毛玻璃 —— 用暖色取代灰白 ---- */
+.nav {
+  background: rgba(247,241,231,0.78);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 0.5px solid var(--line);
+}
+.nav-title { font-weight: 600; letter-spacing: -0.2px; }
+.nav-tab.active { border-bottom-color: var(--accent); }
+
+/* ---- 卡片 ---- */
+.main .card,
+.flow-hint {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ---- 按钮 —— 只改主按钮，ghost/sm 保持原样 ---- */
+.btn-primary {
+  background: linear-gradient(135deg, #8e4f2e 0%, #bf7d45 100%);
+  color: #fffaf5;
+  box-shadow: 0 8px 24px rgba(122,69,38,0.18);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(122,69,38,0.28);
+}
+/* ghost 按钮暖色微调 */
+.btn-ghost {
+  background: rgba(159,95,54,0.08);
+  color: var(--accent);
+}
+.btn-ghost:hover { background: rgba(159,95,54,0.15); }
+
+/* ---- 输入框：只改文本框，不改 select ---- */
+input[type="text"], input[type="url"], input[type="number"], textarea {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 254, 251, 0.95);
+  color: var(--ink);
+}
+input[type="text"]:focus, input[type="url"]:focus, input[type="number"]:focus, textarea:focus {
+  outline: none;
+  border-color: rgba(159,95,54,0.44);
+  box-shadow: 0 0 0 3px rgba(159,95,54,0.1);
+}
+
+/* ---- 表格：只染底色，padding/color 交给页面内联样式 ---- */
+table {
+  border-collapse: collapse;
+  background: rgba(255,254,251,0.9);
+}
+thead th {
+  background: var(--paper-strong);
+  color: var(--ink);
+}
+
+/* ---- 进度条 ---- */
+.progress-bar { background: var(--paper-strong); }
+.progress-fill { background: linear-gradient(90deg, #bf7d45, #9f5f36); }
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(159,95,54,0.28);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(159,95,54,0.48); }
+
+/* ---- 桌面端适配：原布局锁死 640px（移动端），大屏下放宽 + 微调字号 ---- */
+@media (min-width: 900px) {
+  .main { max-width: 960px; }
+  body { font-size: 16px; }
+  .nav-title { font-size: 32px; }
+  .nav-sub { font-size: 14px; }
+  .card { padding: 24px 28px; }
+}
+
+@media (min-width: 1400px) {
+  .main { max-width: 1100px; }
+}

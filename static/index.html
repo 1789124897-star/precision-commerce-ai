@@ -552,6 +552,7 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
 .img-bank-copy:active { background: var(--accent); color: #fff; }
 .img-bank-empty { display: none; }
 </style>
+<link rel="stylesheet" href="/static/theme-warm.css?v=20260724">
 </head>
 <body>
 
@@ -876,7 +877,7 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
           <option value="video_compose">🎬 合成</option>
           <option value="video_shot">🎥 分镜</option>
         </select>
-        <select id="histStatus" onchange="loadHistory()" style="height:36px;padding:4px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);">
+        <select id="histStatusFilter" onchange="loadHistory()" style="height:36px;padding:4px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);">
           <option value="">全部状态</option>
           <option value="PENDING">⏳ 等待中</option>
           <option value="RUNNING">🔄 执行中</option>
@@ -886,7 +887,7 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
         <button class="btn btn-ghost btn-sm" onclick="loadHistory()" style="height:36px;">🔄 刷新</button>
         <button class="btn btn-ghost btn-sm" onclick="exportCSV()" style="height:36px;">📥 导出CSV</button>
       </div>
-      <div class="status" id="histStatus"></div>
+      <div class="status" id="histStatusMsg"></div>
       <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
           <thead>
@@ -2607,14 +2608,14 @@ const STATUS_COLOR = { PENDING:'#888', RUNNING:'#2196F3', SUCCESS:'#4CAF50', FAI
 
 async function loadHistory() {
   const type = document.getElementById('histType').value;
-  const status = document.getElementById('histStatus').value;
+  const status = document.getElementById('histStatusFilter').value;
   const params = new URLSearchParams({ limit: HIST_PS, offset: histPage * HIST_PS });
   if (type) params.set('type', type);
   if (status) params.set('status', status);
   try {
     const res = await fetch(`${A8_API}/tasks?${params}`);
     const payload = await res.json();
-    if (!payload.data) { showS('histStatus','error','无数据'); return; }
+    if (!payload.data) { showS('histStatusMsg','error','无数据'); return; }
     const d = payload.data;
     document.getElementById('histBody').innerHTML = (d.tasks||[]).map(t => {
       const preview = t.status === 'SUCCESS' ? _histPreview(t) : (t.error_message || '—');
@@ -2630,9 +2631,9 @@ async function loadHistory() {
     document.getElementById('histPageInfo').textContent = `共 ${d.total} 条 · 第 ${histPage+1}/${totalPages||1} 页`;
     document.getElementById('histPrev').disabled = histPage <= 0;
     document.getElementById('histNext').disabled = histPage >= totalPages - 1;
-    showS('histStatus','');
+    showS('histStatusMsg','');
   } catch(e) {
-    showS('histStatus','error','加载失败: ' + e.message);
+    showS('histStatusMsg','error','加载失败: ' + e.message);
   }
 }
 
@@ -2654,7 +2655,7 @@ function nextPage() { histPage++; loadHistory(); }
 
 function exportCSV() {
   const type = document.getElementById('histType').value;
-  const status = document.getElementById('histStatus').value;
+  const status = document.getElementById('histStatusFilter').value;
   const params = new URLSearchParams();
   if (type) params.set('type', type);
   if (status) params.set('status', status);
@@ -2662,7 +2663,7 @@ function exportCSV() {
   a.href = `${A8_API}/tasks/export?${params}`;
   a.download = 'tasks_export.csv';
   a.click();
-  showS('histStatus','success','导出中…');
+  showS('histStatusMsg','success','导出中…');
 }
 
 // 初始化

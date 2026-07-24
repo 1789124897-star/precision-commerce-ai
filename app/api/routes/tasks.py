@@ -19,7 +19,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 async def list_tasks(
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    task_type: str = Query("", description="任务类型筛选"),
+    task_type: str = Query("", alias="type", description="任务类型筛选"),
     status: str = Query("", description="状态筛选"),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -62,7 +62,7 @@ async def list_tasks(
 
 @router.get("/export")
 async def export_tasks(
-    task_type: str = Query("", description="任务类型筛选"),
+    task_type: str = Query("", alias="type", description="任务类型筛选"),
     status: str = Query("", description="状态筛选"),
     db: AsyncSession = Depends(get_db),
 ):
