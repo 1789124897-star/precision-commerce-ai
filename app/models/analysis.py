@@ -1,6 +1,5 @@
 """分析 & 策略模型"""
 from datetime import datetime
-
 from typing import Optional
 
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
@@ -26,9 +25,7 @@ class Analysis(Base):
 
 class Strategy(Base):
     __tablename__ = "strategies"
-    __table_args__ = (
-        UniqueConstraint("task_id", "strategy_type", name="uq_task_strategy"),
-    )
+    __table_args__ = (UniqueConstraint("task_id", "strategy_type", name="uq_task_strategy"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     task_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)

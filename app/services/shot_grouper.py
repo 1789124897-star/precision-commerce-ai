@@ -78,6 +78,7 @@ class ShotGrouper:
                     "first_frame_url": first.get("first_frame_url", "") or first.get("image_url", ""),
                     "last_frame_url": "",
                     "scene_prompt": first.get("scene_prompt", ""),
+                    "scene_prompt_en": first.get("scene_prompt_en", ""),
                     "mode": "single",
                 })
             else:
@@ -85,8 +86,13 @@ class ShotGrouper:
                 first_url = first.get("first_frame_url", "") or first.get("image_url", "")
                 last_url = last.get("last_frame_url", "") or last.get("image_url", "")
                 merged_prompt = " | ".join(
-                    s.get("scene_prompt", "") for s in buf_shots if s.get("scene_prompt")
-                ) or "smooth transition, professional product showcase"
+                    s.get("scene_prompt_en", "") or s.get("scene_prompt", "") for s in buf_shots
+                    if s.get("scene_prompt_en") or s.get("scene_prompt")
+                ) or "macro close-up of product, slow push-in with soft studio lighting, subtle product rotation, 50mm lens, cinematic depth of field"
+
+                merged_prompt_en = " | ".join(
+                    s.get("scene_prompt_en", "") for s in buf_shots if s.get("scene_prompt_en")
+                )
 
                 groups.append({
                     "shots": list(buf_shots),
@@ -96,6 +102,7 @@ class ShotGrouper:
                     "first_frame_url": first_url,
                     "last_frame_url": last_url,
                     "scene_prompt": merged_prompt,
+                    "scene_prompt_en": merged_prompt_en or merged_prompt,
                     "mode": "first_last",
                 })
 

@@ -2,9 +2,8 @@
 import asyncio
 import json
 import logging
-from pathlib import Path
 
-from app.core.paths import SCRIPT_DIR as SCRIPTS_DIR
+from app.core.paths import SCRIPTS_DIR
 from app.services.ai_client import AIClient
 from app.services.prompt_templates import build_product_script_prompt
 
@@ -20,25 +19,20 @@ class ScriptGenerator:
         content: str,
         target_segments: int = 5,
         system_prompt: str = "",
-        tts_rate: str = "+0%",
     ) -> dict:
-        """生成结构化口播脚本（段数强制对齐）。
 
-        Returns:
-            {"script": {...}, "script_path": "..."}
-        """
-        actual_system = system_prompt.strip() if system_prompt else (
-            "你是一名拥有百万粉丝的抖音/快手电商带货达人，专攻家居日用类产品。"
-            "开场3秒抛出痛点或场景，用语简洁口语化，结尾有CTA，严格返回JSON。"
-        )
+        if not system_prompt:
+            system_prompt = (
+                "你是一名拥有百万粉丝的抖音/快手电商带货达人，专攻家居日用类产品。"
+                "开场3秒抛出痛点或场景，用语简洁口语化，结尾有CTA，严格返回JSON。"
+            )
 
         user_prompt = build_product_script_prompt(
             content=content,
             target_segments=target_segments,
-            tts_rate=tts_rate,
         )
 
-        raw = await self.ai.generate_script(system_prompt=actual_system, user_prompt=user_prompt)
+        raw = await self.ai.generate_script(system_prompt=system_prompt, user_prompt=user_prompt)
         segments = raw.get("segments", [])
         if not segments:
             raise ValueError("AI 返回的 segments 为空")
@@ -56,31 +50,19 @@ class ScriptGenerator:
 
     @staticmethod
     def _build_result(segments: list[dict]) -> dict:
-        """从 segments 构建完整结果。同时计算每段在全文中的字符偏移量。"""
-        cumulative = ""
+        """从 segments 构建完整结果。"""
+        parts = []
         for i, seg in enumerate(segments):
             seg["index"] = i
-            text = seg.get("voiceover", "")
-            # 粗估时长：中文口语 ~3.5字/秒 + 标点停顿
-            clean_len = len(text.replace(" ", ""))
-            punct_count = sum(1 for ch in text if ch in "，。！？、；：")
-            seg["estimated_duration"] = round(max(2.0, clean_len * 0.28 + punct_count * 0.2), 1)
-            if "image_keywords" not in seg:
-                seg["image_keywords"] = ["产品"]
-            # 分段在全文中的字符偏移量（用于 TTS 逐字时间戳反算实际时长）
-            seg["char_start"] = len(cumulative) + (1 if cumulative else 0)
-            seg["char_end"] = seg["char_start"] + len(text)
-            cumulative += (" " if cumulative else "") + text
+            parts.append(seg.get("voiceover", ""))
 
-        full_text = cumulative
-        total_dur = round(sum(s["estimated_duration"] for s in segments), 1)
+        full_text = " ".join(parts)
         word_count = len(full_text.replace(" ", ""))
 
         return {
             "segments": segments,
             "full_text": full_text,
             "total_words": word_count,
-            "estimated_duration": total_dur,
         }
 
     # ── 文件 I/O ──

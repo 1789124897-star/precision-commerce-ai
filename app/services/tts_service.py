@@ -1,15 +1,16 @@
 ﻿"""TTS 语音合成 — edge-tts 逐字时间戳 + SRT 字幕生成"""
 
 import asyncio
-import json
 import logging
 import os
-import uuid
 from pathlib import Path
 
 import edge_tts
+from aiohttp import ClientError
+from edge_tts.exceptions import EdgeTTSException
 
 from app.core.paths import AUDIO_DIR, OUTPUT_DIR
+from app.models.task import gen_task_id
 from app.services.ai_client import AIClient
 from app.services.script_generator import ScriptGenerator
 
@@ -18,67 +19,50 @@ logger = logging.getLogger(__name__)
 DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
 DEFAULT_RATE = "+0%"
 
+TICKS_PER_SEC = 10_000_000  # 微软时间戳单位：1秒 = 1000万 tick
+
 _PUNCTUATION = {"。", "！", "？", "!", "?", "，", ",", "、", "：", "；", ".", "~", "～", "…"}
 
 
 class TTSEngine:
-    """edge-tts 语音合成引擎，全量脚本合成 + 逐字时间戳 SRT。"""
+    """edge-tts 合成：文本 → 音频 + 逐字字幕"""
 
     def __init__(self):
-        # 绕过系统代理，确保 edge-tts 直连微软 TTS 服务
         os.environ.setdefault("NO_PROXY", "speech.platform.bing.com,*.bing.com")
         os.environ.setdefault("no_proxy", "speech.platform.bing.com,*.bing.com")
 
-    # ── 全量合成 ──
+    # ── 合成入口 ──
 
-    async def synthesize_from_script(
+    async def synthesize_from_text(
         self,
-        script_path: str = "",
-        text: str = "",
+        text: str,
         voice: str = "",
         rate: str = "",
         task_id: str = "",
     ) -> dict:
-        """从脚本 JSON 或纯文本合成音频 + SRT。
+        """文本 → 音频 + SRT + 镜头分组"""
+        text = text.strip()
+        if not text:
+            raise ValueError("配音文本为空")
+        voice = voice or DEFAULT_VOICE
+        rate = rate or DEFAULT_RATE
 
-        text 非空且无 script_path 时自动落盘。
-        Returns:
-            {audio_path, srt_path, duration_sec, segment_durations}
-        """
-        v = voice or DEFAULT_VOICE
-        r = rate or DEFAULT_RATE
+        # 文本落盘
+        task_id = task_id or gen_task_id()
+        ScriptGenerator.save_text(text=text, task_id=task_id)
 
-        if text and not script_path:
-            task_id = task_id or uuid.uuid4().hex[:8]
-            script_path = ScriptGenerator.save_text(text=text, task_id=task_id)
-
-        script_file = Path(script_path)
-        if not script_file.exists():
-            raise FileNotFoundError(f"脚本文件不存在: {script_path}")
-
-        raw = script_file.read_text(encoding="utf-8").strip()
-        # 兼容 JSON 脚本和纯文本
-        try:
-            script = json.loads(raw)
-            full_text = script.get("full_text", "")
-        except (json.JSONDecodeError, ValueError):
-            full_text = raw
-        if not full_text:
-            raise ValueError("脚本内容为空")
-
-        task_id = script_file.parent.name
         out_dir = AUDIO_DIR / task_id
         out_dir.mkdir(parents=True, exist_ok=True)
         audio_path = out_dir / "voice.mp3"
         srt_path = out_dir / "subtitle.srt"
 
         # 流式合成：同时拿到音频字节 + 逐字时间戳
-        result = await _synthesize_with_words(full_text, audio_path, voice=v, rate=r)
+        result = await _synthesize_with_words(text, audio_path, voice=voice, rate=rate)
 
         # 逐字时间戳 → 按标点切句 → SRT
-        _generate_srt_from_words(result["words"], result["offset_ticks"], srt_path)
+        _generate_srt_from_words(result["words"], srt_path)
 
-        duration = result["offset_ticks"] / 10_000_000  # ticks → 秒
+        duration = result["offset_ticks"] / TICKS_PER_SEC
 
         # 解析 SRT 条目 → 贪心分组 → AI 生成镜头场景描述
         srt_entries = _parse_srt_entries(srt_path)
@@ -87,37 +71,46 @@ class TTSEngine:
         grouped_shots = _group_srt_into_shots(srt_entries)
         logger.info(f"TTS 分组后镜头数: {len(grouped_shots)}")
 
-        # AI 生成每组镜头的场景描述
-        voiceovers = [s["voiceover"] for s in grouped_shots]
-        try:
-            scene_prompts = await AIClient().generate_shot_scenes(voiceovers=voiceovers)
-            for shot, sp in zip(grouped_shots, scene_prompts):
-                shot["scene_prompt"] = sp
-            logger.info(f"TTS 镜头场景描述生成完成: {len(scene_prompts)} 组")
-        except Exception as e:
-            logger.warning(f"TTS 镜头场景描述生成失败，使用空占位: {e}")
-            for shot in grouped_shots:
-                shot["scene_prompt"] = ""
+        await _fill_scene_prompts(grouped_shots)
 
         return {
-            "audio_path": "/output/" + str(audio_path.relative_to(OUTPUT_DIR)).replace("\\", "/"),
-            "srt_path": "/output/" + str(srt_path.relative_to(OUTPUT_DIR)).replace("\\", "/"),
+            "audio_path": _to_output_url(audio_path),
+            "srt_path": _to_output_url(srt_path),
             "duration_sec": round(duration, 1),
             "grouped_shots": grouped_shots,
         }
 
     def run_sync(self, **kwargs) -> dict:
         """同步包装，供 Celery 任务调用"""
-        return asyncio.run(self.synthesize_from_script(**kwargs))
+        return asyncio.run(self.synthesize_from_text(**kwargs))
 
 
 # ── 内部工具 ──
 
 
-async def _synthesize_with_words(
-    text: str, output_path: Path, voice: str, rate: str, max_retries: int = 3,
-) -> dict:
-    """流式合成，返回 {words: [(offset_ticks, duration_ticks, char), ...], offset_ticks: int}"""
+async def _fill_scene_prompts(grouped_shots: list[dict]) -> None:
+    """用 AI 给每组镜头填场景描述，失败不阻断主流程"""
+    voiceovers = [s["voiceover"] for s in grouped_shots]
+    try:
+        scene_prompts = await AIClient().generate_shot_scenes(voiceovers=voiceovers)
+        for shot, sp in zip(grouped_shots, scene_prompts):
+            shot["scene_prompt"] = sp.get("zh", "")      # 中文 → 前端显示
+            shot["scene_prompt_en"] = sp.get("en", "")    # 英文 → Seedance
+        logger.info(f"TTS 镜头场景描述生成完成: {len(scene_prompts)} 组")
+    except Exception as e:
+        logger.warning(f"TTS 镜头场景描述生成失败，使用空占位: {e}")
+        for shot in grouped_shots:
+            shot["scene_prompt"] = ""
+            shot["scene_prompt_en"] = ""
+
+
+def _to_output_url(path: Path) -> str:
+    """路径 → /output/ URL"""
+    return "/output/" + str(path.relative_to(OUTPUT_DIR)).replace("\\", "/")
+
+
+async def _synthesize_with_words(text: str, output_path: Path, voice: str, rate: str, max_retries: int = 3,) -> dict:
+    """流式合成音频，返回逐字时间戳列表"""
     last_err = None
     for attempt in range(max_retries):
         try:
@@ -133,11 +126,10 @@ async def _synthesize_with_words(
 
             output_path.write_bytes(audio_bytes)
 
-            # SubMaker.cues 中存的是 Subtitle 对象（.start/.end 为 timedelta，.content 为文本）
             words: list[tuple[int, int, str]] = []
             for cue in submaker.cues:
-                start_tick = int(cue.start.total_seconds() * 10_000_000)
-                end_tick = int(cue.end.total_seconds() * 10_000_000)
+                start_tick = int(cue.start.total_seconds() * TICKS_PER_SEC)
+                end_tick = int(cue.end.total_seconds() * TICKS_PER_SEC)
                 dur_tick = end_tick - start_tick
                 chars = list(cue.content)
                 if not chars:
@@ -149,27 +141,15 @@ async def _synthesize_with_words(
                     words.append((char_start, max(char_dur, 1), ch))
 
             if not words:
-                # 没有任何时间戳 → 按口语速度估算
-                rate_num = float(rate.replace("%", "").replace("+", "").replace("default", "0")) if rate else 0
-                factor = 1.0 + rate_num / 100  # rate="+20%" → 1.2× 速度
-                chars_per_sec = 3.5 * factor
-                total_dur = max(1.0, len(text) / max(chars_per_sec, 1.0))
-                offset_ticks = int(total_dur * 10_000_000)
-                per_char_ticks = offset_ticks // max(len(text), 1)
-                words = [(i * per_char_ticks, per_char_ticks, ch) for i, ch in enumerate(text)]
-                logger.warning(
-                    f"TTS 无逐字时间戳，估算时长: {total_dur:.1f}s "
-                    f"(rate={rate}, {len(text)} 字)"
-                )
-            else:
-                offset_ticks = words[-1][0] + words[-1][1]
+                raise RuntimeError("未获取到逐字时间戳")
+            offset_ticks = words[-1][0] + words[-1][1]
 
             logger.info(
                 f"TTS 完成（逐字）: {output_path} "
-                f"({len(words)} 字, {offset_ticks / 10_000_000:.1f}s)"
+                f"({len(words)} 字, {offset_ticks / TICKS_PER_SEC:.1f}s)"
             )
             return {"words": words, "offset_ticks": offset_ticks}
-        except Exception as e:
+        except (EdgeTTSException, ClientError, OSError, RuntimeError) as e:
             last_err = e
             wait = 2 ** attempt
             logger.warning(f"TTS 尝试 {attempt + 1}/{max_retries} 失败: {e}，{wait}s 后重试")
@@ -177,21 +157,13 @@ async def _synthesize_with_words(
     raise RuntimeError(f"TTS 重试 {max_retries} 次均失败: {last_err}")
 
 
-def _generate_srt_from_words(
-    words: list[tuple[int, int, str]],
-    total_ticks: int,
-    output_path: Path,
-) -> Path:
-    """逐字时间戳 + 标点驱动切句 → SRT（字幕不含标点）。
+def _generate_srt_from_words(words: list[tuple[int, int, str]], output_path: Path,) -> None:
+    """逐字时间戳 → 标点切句 → SRT
 
-    规则：
-    - 句号/感叹号/问号 → 强断，标点丢弃
-    - 逗号 → 强断，标点丢弃
-    - 长度达到 18 字 → 硬断
-    - 尾部残留 < 4 字 → 并入上一句
+    标点强断，标点丢弃。18 字硬断。尾部 < 4 字并入上句。
     """
     MAX_CHARS = 18
-    BREAK_CHARS = {ch for ch in _PUNCTUATION if ch in {"。", "！", "？", "!", "?", "，", ","}}
+    BREAK_CHARS = {"。", "！", "？", "!", "?", "，", ","}
 
     # 逐字扫描，按标点聚合成片段
     raw_chunks: list[dict] = []
@@ -199,10 +171,7 @@ def _generate_srt_from_words(
 
     for offset, dur, char in words:
         buf_words.append((offset, dur, char))
-        if char in BREAK_CHARS:
-            raw_chunks.append(_flush_chunk(buf_words))
-            buf_words = []
-        elif len(buf_words) >= MAX_CHARS:
+        if char in BREAK_CHARS or len(buf_words) >= MAX_CHARS:
             raw_chunks.append(_flush_chunk(buf_words))
             buf_words = []
 
@@ -221,8 +190,8 @@ def _generate_srt_from_words(
     # 写 SRT
     lines: list[str] = []
     for i, ch in enumerate(merged, 1):
-        start_sec = ch["start_tick"] / 10_000_000
-        end_sec = ch["end_tick"] / 10_000_000
+        start_sec = ch["start_tick"] / TICKS_PER_SEC
+        end_sec = ch["end_tick"] / TICKS_PER_SEC
         lines.append(f"{i}")
         lines.append(f"{_secs_to_srt(start_sec)} --> {_secs_to_srt(end_sec)}")
         lines.append(ch["text"])
@@ -230,7 +199,6 @@ def _generate_srt_from_words(
 
     output_path.write_text("\n".join(lines), encoding="utf-8")
     logger.info(f"SRT 生成（逐字时间戳）: {output_path} ({len(merged)} 条)")
-    return output_path
 
 
 def _parse_srt_entries(srt_path: Path) -> list[dict]:
@@ -264,7 +232,8 @@ def _parse_srt_entries(srt_path: Path) -> list[dict]:
 
 def _group_srt_into_shots(srt_entries: list[dict]) -> list[dict]:
     """贪心分组：相邻 SRT 条目累加至 ≥ 4s 为一个镜头。"""
-    MIN = 4
+    MIN_SHOT_SEC = 4   # 单镜头最短时长 
+    MAX_SHOT_SEC = 12  # 总时长不得超过 12s
     groups: list[dict] = []
     buf_entries: list[dict] = []
     buf_dur = 0.0
@@ -274,14 +243,13 @@ def _group_srt_into_shots(srt_entries: list[dict]) -> list[dict]:
         if not buf_entries:
             return
         total_dur = round(buf_dur, 3)
-        display_dur = max(total_dur, float(MIN))
+        display_dur = max(total_dur, float(MIN_SHOT_SEC))
         voiceover = "".join(e["text"] for e in buf_entries)
         groups.append({
             "voiceover": voiceover,
             "duration_sec": display_dur,
-            "_srtDuration": round(total_dur, 1),
-            "_mergedFrom": len(buf_entries),
-            "_mergedDurs": [round(e["duration_sec"], 2) for e in buf_entries],
+            "srt_duration_sec": round(total_dur, 1),
+            "merged_count": len(buf_entries),
             "image_url": "",
             "first_frame_url": "",
             "last_frame_url": "",
@@ -293,20 +261,31 @@ def _group_srt_into_shots(srt_entries: list[dict]) -> list[dict]:
         dur = entry.get("duration_sec", 0)
         if dur <= 0:
             continue
-        if buf_dur + dur > 12 and buf_dur >= MIN:
+        if buf_dur + dur > MAX_SHOT_SEC and buf_dur >= MIN_SHOT_SEC:
             _seal()
         buf_entries.append(entry)
         buf_dur += dur
-        if buf_dur >= MIN:
+        if buf_dur >= MIN_SHOT_SEC:
             _seal()
 
     if buf_entries:
-        _seal()
+        # 尾部不足 4s，能并入上组就并，否则独立成组
+        tail_dur = round(buf_dur, 3)
+        if groups and groups[-1]["srt_duration_sec"] + tail_dur <= MAX_SHOT_SEC:
+            last = groups[-1]
+            last["voiceover"] += "".join(e["text"] for e in buf_entries)
+            new_dur = round(last["srt_duration_sec"] + tail_dur, 1)
+            last["duration_sec"] = new_dur
+            last["srt_duration_sec"] = new_dur
+            last["merged_count"] += len(buf_entries)
+        else:
+            _seal()
 
     return groups
 
 
 def _flush_chunk(buf_words: list[tuple[int, int, str]]) -> dict:
+    """缓冲区字戳压成一条字幕片段，去标点"""
     start = buf_words[0][0]
     last = buf_words[-1]
     end = last[0] + last[1]

@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     # Seedream 生图
     SEEDREAM_IMAGE_URL: str = ""
     SEEDREAM_IMAGE_MODEL: str = ""
-    IMAGE_OUTPUT_DIR: str = "output/images"
     IMAGE_MAX_CONCURRENT: int = 3
 
     # Seedance 图生视频
@@ -34,11 +33,6 @@ class Settings(BaseSettings):
     EDGE_PATH: str = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
     REDIS_URL: str = "redis://localhost:6379/0"
     DATABASE_URL: str = "mysql+aiomysql://root:root@localhost:3306/ecommerce_unified"
-
-    # 安全
-    SECRET_KEY: str = "change-me-in-production"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

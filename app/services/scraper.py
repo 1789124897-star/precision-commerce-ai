@@ -1,33 +1,32 @@
 """1688 商品图抓取，DrissionPage浏览器自动化。"""
-
 import json
 import logging
 import re
 import shutil
 import time
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 import requests
 import yaml
 from DrissionPage import ChromiumOptions, ChromiumPage
 
 from app.core.config import settings
-from app.core.paths import IMAGE_DIR as OUTPUT_ROOT, SCRAPER_CONFIG
+from app.core.paths import IMAGE_DIR, SCRAPER_CONFIG
 
 logger = logging.getLogger(__name__)
 
-with open(SCRAPER_CONFIG, "r", encoding="utf-8") as f:
+with open(SCRAPER_CONFIG, encoding="utf-8") as f:
     SCRAPER_CFG = yaml.safe_load(f)
 
 
 class ImageScraper:
 
     def __init__(self):
-        self.images: List[dict] = []
+        self.images: list[dict] = []
 
     def scrape(self, product_url: str, task_id: str) -> dict:
-        task_dir = OUTPUT_ROOT / task_id
+        task_dir = IMAGE_DIR / task_id
         task_dir.mkdir(parents=True, exist_ok=True)
         logger.info("开始采集 %s -> %s", task_id, task_dir)
 
@@ -204,7 +203,7 @@ class ImageScraper:
         try:
             resp = requests.get(
                 url, stream=True, timeout=SCRAPER_CFG["download"]["timeout"], headers=SCRAPER_CFG["request"]["headers"],
-                proxies={"http": None, "https": None},
+                proxies={"http": "", "https": ""},
             )
             resp.raise_for_status()
             if "text/html" in resp.headers.get("Content-Type", ""):

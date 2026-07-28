@@ -5,8 +5,8 @@ import time
 from typing import Any, Optional
 
 from app.core.utils import image_to_data_url
-from app.services.prompts import STRATEGY_TYPES, build_analysis_prompt, build_strategy_prompt
 from app.services.ai_client import AIClient
+from app.services.prompts import STRATEGY_TYPES, build_analysis_prompt, build_strategy_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +43,10 @@ class AnalysisService:
 
     async def run_strategies(self, analysis: str, system_prompt: str = "") -> dict:
         """并发调用 3 套策略，返回 {"strategies": {type: text}}"""
-        client = AIClient()
         coroutines = []
         for code, meta in STRATEGY_TYPES.items():
             prompt = build_strategy_prompt(analysis, code, meta["name"], system_prompt)
-            coroutines.append(client.generate_strategy(prompt=prompt))
+            coroutines.append(self.ai.generate_strategy(prompt=prompt))
         t0 = time.monotonic()
         logger.info("策略生成开始，并发数=%d", len(coroutines))
         results = await asyncio.gather(*coroutines)

@@ -1,4 +1,4 @@
-﻿"""健康检查"""
+﻿""" 健康检查 """
 from fastapi import APIRouter
 
 router = APIRouter(tags=["Health"])

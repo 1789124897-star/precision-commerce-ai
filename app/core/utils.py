@@ -33,7 +33,7 @@ def image_to_data_url(filepath: str) -> str:
 
 def save_upload(file: UploadFile, prefix: str) -> str:
 
-    filepath = UPLOAD_DIR / f"{prefix}_{uuid.uuid4().hex[:8]}{Path(file.filename).suffix}"
+    filepath = UPLOAD_DIR / f"{prefix}_{uuid.uuid4().hex[:8]}{Path(file.filename or 'unknown').suffix}"
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with filepath.open("wb") as f:
         shutil.copyfileobj(file.file, f)

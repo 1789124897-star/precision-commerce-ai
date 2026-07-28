@@ -41,10 +41,10 @@ class AIClient:
             "temperature": 0.5,
         }
         data = await self._post(settings.BASE_URL, payload, timeout=180.0, headers=self._headers)
-        content = data["choices"][0]["message"]["content"]
-        if not content:
+        result_text: str = data["choices"][0]["message"]["content"]
+        if not result_text:
             raise ValueError("模型返回空内容")
-        return content
+        return result_text
 
     async def generate_strategy(self, *, prompt: str) -> dict[str, Any]:
         """纯文本推理：策略提示词 → JSON 策略结果。"""
@@ -64,20 +64,26 @@ class AIClient:
             max_tokens=2048,
         )
 
-    async def generate_shot_scenes(self, *, voiceovers: list[str]) -> list[str]:
-        """根据每组口播文案生成镜头场景描述。"""
+    async def generate_shot_scenes(self, *, voiceovers: list[str]) -> list[dict]:
+        """根据每组口播文案生成双语镜头场景描述。返回 [{"zh":..., "en":...}, ...]。"""
         from app.services.prompt_templates import build_shot_scene_prompt
         prompt = build_shot_scene_prompt(voiceovers)
         result = await self._text_chat_to_json(
-            system_content="你是资深广告导演，专注电商短视频分镜设计，镜头描述精确到机位、焦段、运镜、布光。",
+            system_content="你是资深广告导演，专攻电商短视频 Seedance AI 分镜。输出纯英文视觉 prompt，包含 shot size / lens / camera movement / lighting / action，每句 40-80 词，纯视觉描述无抽象形容词。",
             user_content=prompt,
             temperature=0.6,
-            max_tokens=2048,
+            max_tokens=4096,
         )
         scenes = result.get("scenes", [])
         if not scenes:
             raise ValueError(f"AI 镜头场景生成返回空 scenes: {result}")
-        return scenes
+        normalized = []
+        for s in scenes:
+            if isinstance(s, str):
+                normalized.append({"zh": s, "en": s})
+            else:
+                normalized.append({"zh": s.get("zh", ""), "en": s.get("en", s.get("zh", ""))})
+        return normalized
 
     async def _text_chat_to_json(
         self,
@@ -97,7 +103,8 @@ class AIClient:
         if not content or not content.strip():
             finish_reason = data["choices"][0].get("finish_reason", "unknown")
             raise ValueError(f"模型返回空内容，finish_reason={finish_reason}，请增大 max_tokens")
-        return json.loads(content)
+        result: dict[str, Any] = json.loads(content)
+        return result
 
     async def _text_chat(
         self,
@@ -141,7 +148,8 @@ class AIClient:
                 async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
                     resp = await client.post(url, headers=headers or self._headers, json=payload)
                     resp.raise_for_status()
-                    return resp.json()
+                    result: dict[str, Any] = resp.json()
+                    return result
             except (
                 httpx.ConnectTimeout,
                 httpx.ReadTimeout,
@@ -156,6 +164,7 @@ class AIClient:
                     attempt + 1, wait, type(e).__name__,
                 )
                 await asyncio.sleep(wait)
+        raise RuntimeError("HTTP 请求失败，已达最大重试次数")
 
     async def generate_images(
         self,

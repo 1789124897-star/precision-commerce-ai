@@ -1,10 +1,10 @@
 """Seedance 图生视频服务 — 图片上传 → API 提交 → 轮询 → 下载"""
-
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 import httpx
 
@@ -42,7 +42,7 @@ class SeedanceService:
                 )
             data = resp.json()
             if data.get("success"):
-                url = data["data"]["url"]
+                url: str = data["data"]["url"]
                 logger.info(f"上传成功: {url}")
                 return url
             msg = data.get("message", "unknown")
@@ -60,7 +60,7 @@ class SeedanceService:
                 )
             data = resp.json()
             if data.get("status") and data.get("data", {}).get("links", {}).get("url"):
-                url = data["data"]["links"]["url"]
+                url: str = data["data"]["links"]["url"]
                 logger.info(f"imgse 上传成功: {url}")
                 return url
             raise RuntimeError(f"imgse upload failed: {resp.text[:200]}")
@@ -113,7 +113,7 @@ class SeedanceService:
         else:
             mode = "文生视频"
 
-        content.append({"type": "text", "text": prompt or "product showcase, professional lighting"})
+        content.append({"type": "text", "text": prompt or "medium shot product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens"})
 
         payload = {
             "model": settings.SEEDANCE_VIDEO_MODEL,
@@ -145,7 +145,7 @@ class SeedanceService:
                 logger.error(f"Seedance 提交失败 HTTP {resp.status_code}: {body}")
                 raise RuntimeError(f"Seedance API error {resp.status_code}: {body}")
 
-            task_id = data.get("id") or data.get("taskId") or data.get("task_id")
+            task_id: str = data.get("id") or data.get("taskId") or data.get("task_id")
             if not task_id:
                 logger.error(f"Seedance 响应无 task_id: {resp.text[:300]}")
                 raise RuntimeError(f"Seedance 响应缺少 task_id: {resp.text[:200]}")
@@ -172,7 +172,7 @@ class SeedanceService:
                 logger.info(f"Seedance 轮询 {attempt+1}/{poll_max}: status={status}")
 
                 if status == "succeeded":
-                    video_url = data.get("content", {}).get("video_url")
+                    video_url: str = data.get("content", {}).get("video_url")
                     if video_url:
                         logger.info(f"Seedance 任务完成: {task_id} → {video_url}")
                         return video_url
@@ -212,7 +212,8 @@ class SeedanceService:
     ) -> Path:
         """完整流程：上传图片 → 提交 Seedance → 轮询 → 下载 → 返回本地视频路径。"""
 
-        notify = lambda s, d="": self._notify(s, d, shot_index, on_progress)
+        def notify(s, d=""):
+            self._notify(s, d, shot_index, on_progress)
 
         notify("上传图片", f"{image_path.name}")
         public_url = await self.upload_to_public_url(image_path)
@@ -247,7 +248,8 @@ class SeedanceService:
     ) -> Path:
         """直接从公网 URL 调 Seedance（图生视频-首帧），跳过图床上传。"""
 
-        notify = lambda s, d="": self._notify(s, d, shot_index, on_progress)
+        def notify(s, d=""):
+            self._notify(s, d, shot_index, on_progress)
 
         notify("提交生成", f"url: {image_url[:50]}... prompt: {prompt[:50]}...")
         task_id = await self.submit_task(image_url, prompt, aspect_ratio, duration_sec, generate_audio=generate_audio, resolution=resolution)
@@ -278,7 +280,8 @@ class SeedanceService:
     ) -> Path:
         """纯文生视频：无参考图，仅靠 prompt 描述生成。"""
 
-        notify = lambda s, d="": self._notify(s, d, shot_index, on_progress)
+        def notify(s, d=""):
+            self._notify(s, d, shot_index, on_progress)
 
         notify("文生视频", f"prompt: {prompt[:60]}...")
         task_id = await self.submit_task(
@@ -314,7 +317,8 @@ class SeedanceService:
     ) -> Path:
         """图生视频-首尾帧：指定首帧和尾帧图片，AI 生成中间过渡视频。"""
 
-        notify = lambda s, d="": self._notify(s, d, shot_index, on_progress)
+        def notify(s, d=""):
+            self._notify(s, d, shot_index, on_progress)
 
         notify("首尾帧生成", f"prompt: {prompt[:50]}...")
         task_id = await self.submit_task(
@@ -373,7 +377,7 @@ class SeedanceService:
         if image_url and image_url.startswith("http"):
             return await self.generate_clip_from_url(
                 image_url=image_url,
-                prompt=prompt or "product showcase",
+                prompt=prompt or "medium shot of product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens",
                 aspect_ratio=aspect_ratio,
                 duration_sec=duration_sec,
                 shot_index=shot_index,
@@ -382,7 +386,7 @@ class SeedanceService:
                 resolution=resolution,
             )
         return await self.generate_clip_text_only(
-            prompt=prompt or "product showcase",
+            prompt=prompt or "medium shot of product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens",
             aspect_ratio=aspect_ratio,
             duration_sec=duration_sec,
             shot_index=shot_index,

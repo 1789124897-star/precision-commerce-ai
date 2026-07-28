@@ -1,4 +1,4 @@
-"""Celery 实例 — 含重试策略、Beat 定时任务、队列路由"""
+"""Celery 实例 — 队列隔离 + 定时任务 + 重试策略"""
 from celery import Celery
 from celery.schedules import crontab
 from kombu import Queue
@@ -25,26 +25,26 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    # ── 序列化：任务参数和结果统一用 JSON ──
+    # 序列化：任务参数和结果统一用 JSON
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
 
-    # ── 任务追踪 ──
+    # 任务追踪
     task_track_started=True,
 
-    # ── 可靠性 ──
+    # 可靠性：任务跑完才确认 + 逐个取任务，防止长任务堆积
     task_acks_late=True,
     worker_prefetch_multiplier=1,
 
-    # ── 时区 ──
+    # 时区
     timezone="Asia/Shanghai",
     enable_utc=False,
 
-    # ── 日志：不劫持 root logger，用我们自己的配置 ──
+    # 日志：不劫持 root logger，用我们自己的配置
     worker_hijack_root_logger=False,
 
-    # ── 多队列：按任务类型隔离，防止 CPU 密集任务饿死 IO 密集任务 ──
+    # 多队列隔离：按任务类型分队列，防止 CPU 密集任务饿死 IO 密集任务
     task_queues=(
         Queue("video",   routing_key="video.#",   queue_arguments={"x-max-priority": 10}),
         Queue("ai",      routing_key="ai.#",      queue_arguments={"x-max-priority": 10}),
@@ -66,7 +66,7 @@ celery_app.conf.update(
     },
     task_default_priority=5,
 
-    # ── Beat 定时任务（调度器） ──
+    # 定时任务
     beat_schedule={
         "cleanup-stale-tasks-every-30min": {
             "task": "cleanup_stale_tasks",

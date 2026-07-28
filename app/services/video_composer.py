@@ -1,14 +1,14 @@
 """视频合成服务 — MoviePy Ken Burns + 字幕叠加 + Seedance AI 图生视频"""
-
 import asyncio
 import logging
 import random
 import subprocess
 import tempfile
 import uuid
+from collections.abc import Callable
 from math import ceil
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 import numpy as np
 from moviepy import (
@@ -20,7 +20,7 @@ from moviepy import (
     concatenate_videoclips,
     vfx,
 )
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from proglog import ProgressBarLogger
 
 from app.core.paths import OUTPUT_DIR, VIDEO_DIR
@@ -69,6 +69,7 @@ class VideoComposer:
         srt_path: str,
         task_id: str,
         aspect_ratio: str = "9:16",
+        resolution: str = "720p",
         transition: str = "fade",
         quality_check: bool = True,
         on_progress: Optional[Callable[[float, str], None]] = None,
@@ -83,10 +84,11 @@ class VideoComposer:
         Returns:
             {"video_path": str, "duration_sec": float, "quality": dict|None}
         """
-        report = lambda p, s: self._report(p, s, on_progress)
+        def report(p, s):
+            self._report(p, s, on_progress)
 
         # 解析分辨率
-        w, h = self._parse_aspect(aspect_ratio)
+        w, h = self._parse_aspect(aspect_ratio, resolution)
         report(0.0, f"加载 {len(image_urls)} 张图片...")
 
         # 下载/加载图片
@@ -129,8 +131,8 @@ class VideoComposer:
         while remaining > 0.1:
             clip_dur = min(per_img, remaining)
             clip = self._ken_burns_clip(images[img_idx % len(images)], w, h, clip_dur)
-            if transition == "fade" and clips:
-                clip = clip.with_effects([vfx.FadeIn(0.3)])
+            if clips:
+                clip = self._apply_transition(clip, transition)
             clips.append(clip)
             remaining -= clip_dur
             img_idx += 1
@@ -197,17 +199,21 @@ class VideoComposer:
 
     # ── 私有方法 ──
 
-    def _parse_aspect(self, ratio: str) -> tuple[int, int]:
-        """解析宽高比 -> (w, h)，基础边 1080px"""
+    def _parse_aspect(self, ratio: str, resolution: str = "720p") -> tuple[int, int]:
+        """解析宽高比 + 分辨率 → (w, h)。短边 = resolution 像素，长边按比例。"""
+        base_map = {"480p": 480, "720p": 720, "1080p": 1080}
+        short = base_map.get(resolution, 720)
         parts = ratio.replace(":", "/").split("/")
         if len(parts) != 2:
-            return (1080, 1920)
+            return (short, int(short * 16 / 9))  # 默认竖屏
         r = int(parts[0]) / int(parts[1])
         if r > 1:
-            return (1920, 1080)
+            # 横屏：高为短边
+            return (int(short * r), short)
         if r < 1:
-            return (1080, 1920)
-        return (1080, 1080)
+            # 竖屏：宽为短边
+            return (short, int(short / r))
+        return (short, short)
 
     def _to_local(self, url_or_path: str) -> Path:
         """将 /output/... 路径转为本地绝对路径"""
@@ -218,7 +224,6 @@ class VideoComposer:
 
     def _cleanup_temp_files(self):
         """清理 MoviePy 遗留的临时文件（如 TEMP_MPY_wvf_snd.mp4）"""
-        import glob
         cwd = Path.cwd()
         for pattern in ["TEMP_MPY_*", "temp_mpy_*"]:
             for f in cwd.glob(pattern):
@@ -321,6 +326,24 @@ class VideoComposer:
         clip = clip.with_effects([vfx.FadeIn(0.3), vfx.FadeOut(0.3)])
         return clip
 
+    @staticmethod
+    def _apply_transition(clip: VideoClip, transition: str) -> VideoClip:
+        """对非首帧 clip 添加入场转场效果。"""
+        if transition == "slide":
+            direction = random.choice(["left", "right", "top", "bottom"])
+            return clip.with_effects([vfx.SlideIn(0.4, direction)])
+        if transition == "zoom":
+            return clip.with_effects([vfx.CrossFadeIn(0.4)])
+        if transition == "random":
+            t = random.choice([
+                lambda c: c.with_effects([vfx.FadeIn(0.3)]),
+                lambda c: c.with_effects([vfx.SlideIn(0.4, random.choice(["left", "right"]))]),
+                lambda c: c.with_effects([vfx.CrossFadeIn(0.4)]),
+            ])
+            return t(clip)
+        # fade 或未知 → 默认淡入
+        return clip.with_effects([vfx.FadeIn(0.3)])
+
     def _make_placeholder(self, w: int, h: int) -> Path:
         img = Image.new("RGB", (w, h), color=(30, 30, 30))
         draw = ImageDraw.Draw(img)
@@ -346,7 +369,7 @@ class VideoComposer:
         blocks = content.strip().split("\n\n")
         subtitles = []
         for block in blocks:
-            lines = [l.strip() for l in block.split("\n") if l.strip()]
+            lines = [line.strip() for line in block.split("\n") if line.strip()]
             if len(lines) < 3:
                 continue
             try:
@@ -362,8 +385,11 @@ class VideoComposer:
         if not subtitles:
             return []
 
-        # 加载字体
-        font = self._load_font(48)
+        # 字号自适应：取短边的 7.8%，兼容 9:16 / 16:9 / 1:1
+        font_size = int(min(w, h) * 0.078)
+        font = self._load_font(font_size)
+        # 阴影偏移：字号 4%，至少 2px
+        shadow = max(2, int(font_size * 0.04))
 
         clips = []
         for idx, (start_sec, end_sec, text) in enumerate(subtitles):
@@ -372,7 +398,7 @@ class VideoComposer:
                 continue
 
             # 渲染字幕图片
-            img = self._render_text_image(text, font, w)
+            img = self._render_text_image(text, font, w, shadow)
             if img is None:
                 continue
 
@@ -381,8 +407,17 @@ class VideoComposer:
             img.save(str(tmp))
 
             sub_clip = ImageClip(str(tmp), duration=duration)
-            # 定位到底部 10%
-            sub_clip = sub_clip.with_position(("center", int(h * 0.82)))
+            # 字幕垂直定位：不同宽高比适配不同平台底部 UI
+            if w < h:
+                # 竖屏 9:16 → 抖音，留 18% 避开购物车/描述
+                y_pos = int(h * 0.82)
+            elif w > h:
+                # 横屏 16:9 → YouTube，留 12%
+                y_pos = int(h * 0.88)
+            else:
+                # 方屏 1:1 → Instagram，留 15%
+                y_pos = int(h * 0.85)
+            sub_clip = sub_clip.with_position(("center", y_pos))
             sub_clip = sub_clip.with_start(start_sec)
             clips.append(sub_clip)
 
@@ -395,12 +430,17 @@ class VideoComposer:
 
     def _load_font(self, size: int) -> ImageFont.FreeTypeFont:
         if FONT_PATH and FONT_PATH.exists():
+            logger.info(f"加载字体: {FONT_PATH} size={size}")
             return ImageFont.truetype(str(FONT_PATH), size)
+        logger.warning("未找到中文字体，使用默认字体（中文可能不显示）")
         return ImageFont.load_default()
 
-    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> Optional[Image.Image]:
-        """渲染中文字幕图片：白字 + 黑阴影，无背景条"""
-        margin = 30
+    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int, shadow: int = 2) -> Optional[Image.Image]:
+        """渲染中文字幕图片：白字 + 黑阴影，无背景条。
+
+        shadow: 阴影偏移量 px，按字号 4% 计算。
+        """
+        margin = int(max_w * 0.04)  # 左右留白 4%
         lines = []
         current = ""
         for char in text:
@@ -416,7 +456,8 @@ class VideoComposer:
         if not lines:
             return None
 
-        line_h = font.getbbox("测")[3] + 14
+        # 行高：字高 + 30% 行间距
+        line_h = font.getbbox("测")[3] + int(font.size * 0.3)
         img_h = line_h * len(lines) + margin
         img_w = max_w
 
@@ -428,7 +469,7 @@ class VideoComposer:
             text_w = bbox[2]
             x = (img_w - text_w) // 2
             y = margin // 2 + i * line_h
-            draw.text((x + 2, y + 2), line, font=font, fill=(0, 0, 0, 160))
+            draw.text((x + shadow, y + shadow), line, font=font, fill=(0, 0, 0, 180))
             draw.text((x, y), line, font=font, fill=(255, 255, 255, 255))
 
         return img
@@ -441,6 +482,7 @@ class VideoComposer:
         srt_path: str,
         task_id: str,
         aspect_ratio: str = "9:16",
+        resolution: str = "720p",
         generate_audio: bool = False,
         on_progress: Optional[Callable[[float, str], None]] = None,
         segment_durations: Optional[list[float]] = None,
@@ -452,13 +494,19 @@ class VideoComposer:
             images: 图片 URL 列表
             segment_durations: 每段口播的实际 TTS 时长（秒），非空时自动启动镜头组分组
         """
-        report = lambda p, s: self._report(p, s, on_progress)
+        def report(p, s):
+            self._report(p, s, on_progress)
 
-        w, h = self._parse_aspect(aspect_ratio)
-        report(0.0, f"加载 {len(images)} 张图片...")
+        w, h = self._parse_aspect(aspect_ratio, resolution)
 
-        local_images = self._load_local_images(images)
-        # 图片可选：每个分镜会优先用 shot.image_url (Seedance)，失败则用本地图片，再失败则纯色占位
+        # 检测是否所有镜头都已预生成视频 — 是则跳过图片加载（无声模式）
+        all_pregen = all(s.get("clip_path", "") for s in shots)
+        if all_pregen:
+            local_images = []
+            report(0.0, f"{len(shots)} 个预生成分镜就绪，跳过图片加载")
+        else:
+            report(0.0, f"加载 {len(images)} 张图片...")
+            local_images = self._load_local_images(images)
 
         # 加载音频（可选）
         report(0.03, "加载音频...")
@@ -509,6 +557,8 @@ class VideoComposer:
             # 镜头组直接用已算好的 seedance_dur（已在 [4, 12] 内）
             dur = float(group["seedance_dur"])
             scene_prompt = group.get("scene_prompt", "")
+            scene_prompt_en = group.get("scene_prompt_en", "")  # 英文版 → Seedance
+            seedance_prompt = scene_prompt_en or scene_prompt           # 优先英文，兜底中文
             image_url = group.get("image_url", "")
             first_frame_url = group.get("first_frame_url", "")
             last_frame_url = group.get("last_frame_url", "")
@@ -518,7 +568,6 @@ class VideoComposer:
             pre_generated = group["shots"][0].get("clip_path", "") if group["shots"] else ""
 
             label = f"镜组{i+1}/{total_items}" if use_groups else f"分镜{i+1}/{total_items}"
-            detail = f"({dur}s" + (f", {segment_count}段口播)" if segment_count > 1 else ")")
             pct = 0.05 + (i / total_items) * 0.55
             report(pct, f"{label} {dur:.1f}s" + (f" ×{segment_count}段" if segment_count > 1 else ""))
 
@@ -544,11 +593,12 @@ class VideoComposer:
                     seedance_path = asyncio.run(SeedanceService().generate_clip_first_last_frame(
                         first_frame_url=first_frame_url,
                         last_frame_url=last_frame_url,
-                        prompt=scene_prompt or "smooth transition, professional product showcase",
+                        prompt=seedance_prompt or "macro close-up of product, slow push-in with soft studio lighting, subtle product rotation, 50mm lens, cinematic depth of field",
                         aspect_ratio=aspect_ratio,
                         duration_sec=dur,
                         shot_index=i,
                         generate_audio=generate_audio,
+                        resolution=resolution,
                     ))
                     clip = VideoFileClip(str(seedance_path))
                     if clip.duration > dur + 1.5:
@@ -562,11 +612,12 @@ class VideoComposer:
                 try:
                     seedance_path = asyncio.run(SeedanceService().generate_clip_from_url(
                         image_url=image_url,
-                        prompt=scene_prompt or "product showcase, professional lighting",
+                        prompt=seedance_prompt or "medium shot of product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens",
                         aspect_ratio=aspect_ratio,
                         duration_sec=dur,
                         shot_index=i,
                         generate_audio=generate_audio,
+                        resolution=resolution,
                     ))
                     clip = VideoFileClip(str(seedance_path))
                     if clip.duration > dur + 1.5:
@@ -576,13 +627,14 @@ class VideoComposer:
                     logger.warning(f"{label} 图生视频失败: {e}")
 
             # 纯文生视频：无参考图，仅凭场景描述生成
-            if clip is None and scene_prompt:
+            if clip is None and seedance_prompt:
                 try:
                     seedance_path = asyncio.run(SeedanceService().generate_clip_text_only(
-                        prompt=scene_prompt,
+                        prompt=seedance_prompt,
                         aspect_ratio=aspect_ratio,
                         duration_sec=dur,
                         shot_index=i,
+                        resolution=resolution,
                     ))
                     clip = VideoFileClip(str(seedance_path))
                     if clip.duration > dur + 1.5:
@@ -617,16 +669,19 @@ class VideoComposer:
         # 拼接
         report(0.62, "拼接音画...")
         video = concatenate_videoclips(clips, method="compose")
+        video = video.resized((w, h))
         if has_audio:
             video = video.with_audio(audio)
 
         # 叠加 SRT 字幕
         if srt_path:
             local_srt = self._to_local(srt_path)
+            logger.info(f"字幕路径: raw={srt_path!r} local={local_srt} exists={local_srt.exists()}")
             if local_srt.exists():
                 report(0.75, "叠加字幕...")
                 try:
                     subtitle_clips = self._render_srt(local_srt, w, h)
+                    logger.info(f"字幕条数: {len(subtitle_clips)}")
                     if subtitle_clips:
                         video = CompositeVideoClip([video] + subtitle_clips)
                 except Exception as e:
