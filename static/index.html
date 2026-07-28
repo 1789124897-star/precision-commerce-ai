@@ -126,6 +126,7 @@ label {
   padding: 8px 16px; font-size: 13px; border-radius: 20px;
 }
 .btn-ghost:hover { background: var(--border); }
+.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-sm { padding: 6px 14px; font-size: 12px; border-radius: 16px; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn-icon {
@@ -552,6 +553,7 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
 .img-bank-copy:active { background: var(--accent); color: #fff; }
 .img-bank-empty { display: none; }
 </style>
+<link rel="stylesheet" href="/static/theme-warm.css?v=20260724">
 </head>
 <body>
 
@@ -565,6 +567,7 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
     <button class="nav-tab" data-tab="tabDirectStrategy">🎯 差异化策略</button>
     <button class="nav-tab" data-tab="tabImageGen">🖼️ AI生图</button>
     <button class="nav-tab" data-tab="tabVideo">🎬 AI视频</button>
+    <button class="nav-tab" data-tab="tabHistory">📋 任务历史</button>
   </div>
 </nav>
 
@@ -736,7 +739,7 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
         <div>
           <div class="vid-lbl">分段数量</div>
           <div style="display:flex;gap:8px;align-items:center;">
-            <div class="vid-num-wrap"><input type="number" id="vidSegments" min="3" max="8" value="5" step="1"><span class="vid-unit">段</span></div>
+            <div class="vid-num-wrap"><input type="number" id="vidSegments" min="5" max="12" value="8" step="1"><span class="vid-unit">段</span></div>
           </div>
         </div>
         <button class="btn btn-ghost" style="height:38px;padding:0 18px;" onclick="doGenScript()" id="btnGenScript">🤖 AI生成</button>
@@ -792,6 +795,10 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
         <div style="display:flex;gap:8px;margin-top:6px;">
           <a id="vidAudioDownload" href="#" download class="btn btn-ghost btn-sm" style="flex:1;text-align:center;">⬇ 下载音频</a>
           <a id="vidSrtDownload" href="#" download class="btn btn-ghost btn-sm" style="flex:1;text-align:center;">⬇ 下载字幕</a>
+        </div>
+        <div id="vidTtsShotsImport" style="margin-top:6px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;gap:8px;">
+          <span id="vidTtsShotsCount" style="font-size:12px;color:var(--text2);">配音完成后可导入镜头</span>
+          <button class="btn btn-ghost btn-sm" onclick="importTtsShots()" style="margin-left:8px;font-size:12px;">📥 导入镜头到分镜</button>
         </div>
       </div>
     </div>
@@ -859,6 +866,57 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
     </div>
   </div>
 
+  <!-- ============ TAB: 任务历史 ============ -->
+  <div id="tabHistory" class="tab-content" style="display:none;">
+    <div class="card">
+      <div class="card-title"><span class="icon">📋</span>任务历史</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <select id="histType" onchange="loadHistory()" style="height:36px;padding:4px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);">
+          <option value="">全部类型</option>
+          <option value="scrape">📦 采集</option>
+          <option value="analysis">📊 分析</option>
+          <option value="strategy">🎯 策略</option>
+          <option value="image_gen">🖼️ 生图</option>
+          <option value="script_gen">📝 脚本</option>
+          <option value="tts_gen">🔊 配音</option>
+          <option value="video_compose">🎬 合成</option>
+          <option value="video_shot">🎥 分镜</option>
+        </select>
+        <select id="histStatusFilter" onchange="loadHistory()" style="height:36px;padding:4px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);">
+          <option value="">全部状态</option>
+          <option value="PENDING">⏳ 等待中</option>
+          <option value="RUNNING">🔄 执行中</option>
+          <option value="SUCCESS">✅ 成功</option>
+          <option value="FAILURE">❌ 失败</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="loadHistory()" style="height:36px;">🔄 刷新</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportCSV()" style="height:36px;">📥 导出CSV</button>
+      </div>
+      <div class="status" id="histStatusMsg"></div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="color:var(--text2);text-align:left;">
+              <th style="padding:6px 8px;white-space:nowrap;">时间</th>
+              <th style="padding:6px 8px;white-space:nowrap;">任务ID</th>
+              <th style="padding:6px 8px;white-space:nowrap;">类型</th>
+              <th style="padding:6px 8px;white-space:nowrap;">状态</th>
+              <th style="padding:6px 8px;">结果</th>
+            </tr>
+          </thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span id="histPageInfo" style="font-size:12px;color:var(--text2);"></span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" id="histPrev" onclick="prevPage()">← 上一页</button>
+          <button class="btn btn-ghost btn-sm" id="histNext" onclick="nextPage()">下一页 →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ====== LIGHTBOX ====== -->
@@ -916,6 +974,7 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(c => c.style.display = c.id === tabId ? '' : 'none');
   updateFlowHint();
   if (tabId === 'tabVideo') { }
+  if (tabId === 'tabHistory') { histPage = 0; loadHistory(); }
 }
 function updateFlowHint() {
   const steps = { tabScrape: 0, tabAnalysis: 1, tabDirectStrategy: 2, tabImageGen: 3, tabVideo: 4 };
@@ -1426,6 +1485,7 @@ function strategyToVideo(key) {
   S.vidStrategyKey = key;
 
   switchTab('tabVideo');
+  document.getElementById('tabVideo').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Port 8000 轮询
@@ -1481,7 +1541,7 @@ async function doGenScript() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         content,
-        segments: parseInt(document.getElementById('vidSegments').value) || 5,
+        segments: parseInt(document.getElementById('vidSegments').value) || 8,
         system_prompt: document.getElementById('vidSystemPrompt').value,
       }),
     });
@@ -1503,7 +1563,7 @@ async function doGenScript() {
       }).join('\n\n');
       // 自动填充配音文本：提取所有口播片段合并为纯文本
       document.getElementById('vidTtsText').value = result.script.segments.map(s => s.voiceover).join('\n');
-      showS('vidScriptStatus', 'success', `已填充 · ${result.script.total_words} 字 · ${result.script.segments.length} 段 · 约 ${Math.round(result.script.estimated_duration)} 秒`);
+      showS('vidScriptStatus', 'success', `已填充 · ${result.script.total_words} 字 · ${result.script.segments.length} 段`);
       btn.disabled = false; btn.textContent = '🤖 AI生成';
     }, (error) => {
       showS('vidScriptStatus', 'error', `生成失败: ${error}`);
@@ -1519,18 +1579,17 @@ async function doGenTTS() {
   const btn = document.getElementById('btnGenTTS');
   btn.disabled = true; btn.textContent = '⏳ 配音中...';
   showS('vidTTSStatus', 'info', '');
-
-  const taskId = S.scriptTaskId || 'user_' + Date.now().toString(36);
+  S._pendingShots = null;
+  document.getElementById('vidTtsShotsCount').textContent = '配音完成后可导入镜头';
 
   try {
     const res = await fetch(`${A8_API}/video/generate-tts`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        script_path: S.scriptPath || '',
-        text: S.scriptPath ? '' : text,
-        task_id: taskId,
+        text: text,
         voice: document.getElementById('vidVoice').value,
         rate: document.getElementById('vidRate').value,
+        parent_task_id: S.scriptTaskId || null,
       }),
     });
     if (!res.ok) {
@@ -1542,7 +1601,7 @@ async function doGenTTS() {
     }
     const data = await res.json();
     const pollTaskId = data.data.task_id;
-    S.scriptTaskId = taskId;
+    S.ttsTaskId = pollTaskId;
     poll8000(pollTaskId, (result) => {
       S.audioPath = result.audio_path; S.srtPath = result.srt_path;
       const audioEl = document.getElementById('vidTtsAudio');
@@ -1557,13 +1616,9 @@ async function doGenTTS() {
       const shots = result.grouped_shots || [];
 
       if (shots.length) {
-        S.storyboard = { shots };
-        S.vidSegmentDurations = shots.map(s => s._srtDuration || s.duration_sec || 0);
-
-        if (S.vidComposeMode === 'premium' || S.vidComposeMode === 'premium_audio') {
-          renderStoryboard();
-        }
-        showS('vidTTSStatus', 'success', `配音完成 · ${result.duration_sec.toFixed(1)}秒 · 已自动合并为 ${shots.length} 镜`);
+        S._pendingShots = shots;
+        document.getElementById('vidTtsShotsCount').textContent = `${shots.length} 个镜头就绪`;
+        showS('vidTTSStatus', 'success', `配音完成 · ${result.duration_sec.toFixed(1)}秒 · ${shots.length} 镜`);
       } else {
         showS('vidTTSStatus', 'success', `配音完成 · 时长 ${result.duration_sec.toFixed(1)} 秒`);
       }
@@ -1587,7 +1642,7 @@ function vidRenderComposeParams() {
     uploadSec.style.display = '';
     premiumZone.style.display = 'none';
     const ttsImportBtn = document.getElementById('vidImportTtsBtn');
-    if (ttsImportBtn) ttsImportBtn.style.display = 'none';
+    if (ttsImportBtn) ttsImportBtn.style.display = '';
     const imgZone = document.getElementById('vidUploadImagesZone');
     if (imgZone) imgZone.style.display = '';
     el.innerHTML = `
@@ -1627,7 +1682,6 @@ function vidRenderComposeParams() {
       if (srtCol) srtCol.parentElement.style.display = 'none';
     } else {
       if (audioCol) audioCol.parentElement.style.display = '';
-      if (audioCard && S.vidGenAudio) audioCard.style.display = 'none';
       if (srtCol) srtCol.parentElement.style.display = '';
     }
     el.innerHTML = '';
@@ -1692,9 +1746,9 @@ function renderStoryboard() {
   const shotsHtml = S.storyboard.shots.map((s, i) => {
     total += (s.duration_sec >= 4 && s.duration_sec <= 12) ? s.duration_sec : 4;
     // 合并标识
-    const isMerged = s._mergedFrom && s._mergedFrom > 1;
+    const isMerged = s.merged_count && s.merged_count > 1;
     const mergeBadge = isMerged
-      ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;background:#fff3cd;color:#856404;border-radius:3px;font-size:11px;font-weight:600;">${s._mergedFrom} 段合并</span>`
+      ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;background:#fff3cd;color:#856404;border-radius:3px;font-size:11px;font-weight:600;">${s.merged_count} 段合并</span>`
       : '';
 
     const selHtml = `<div style="display:flex;gap:8px;flex-direction:column;">
@@ -1834,12 +1888,13 @@ async function generateShot(i) {
         image_url: firstFrame,
         first_frame_url: shot.first_frame_url || '',
         last_frame_url: shot.last_frame_url || '',
-        scene_prompt: shot.scene_prompt || '',
+        scene_prompt: shot.scene_prompt_en || shot.scene_prompt || '',
         duration_sec: actualDur,
         aspect_ratio: spec,
         generate_audio: genAudio,
         resolution: resolution,
         shot_index: i,
+        parent_task_id: S.ttsTaskId || null,
       }),
     });
 
@@ -1919,23 +1974,25 @@ async function doComposePremium() {
     // Step 1: 为选中镜头重新配音
     let composeAudioPath = S.audioPath || '';
     let composeSrtPath = S.srtPath || '';
+    let composeParentId = S.ttsTaskId || null;
 
     if (!skipExternalAudio) {
       const voiceText = activeShots.map(s => s.voiceover || '').filter(Boolean).join('\n');
       if (voiceText) {
         stage.textContent = '重新配音中...';
         bar.style.width = '5%';
-        const ttsTaskId = 'compose_' + Date.now().toString(36);
         const ttsRes = await fetch(`${A8_API}/video/generate-tts`, {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
-            text: voiceText, task_id: ttsTaskId,
+            text: voiceText,
             voice: document.getElementById('vidVoice').value,
             rate: document.getElementById('vidRate').value,
+            parent_task_id: S.scriptTaskId || null,
           }),
         });
         if (!ttsRes.ok) { const errtxt = await ttsRes.text(); throw new Error('配音提交失败: ' + errtxt.slice(0, 100)); }
         const ttsData = await ttsRes.json();
+        composeParentId = ttsData.data.task_id;
         await new Promise((resolve, reject) => {
           poll8000(ttsData.data.task_id, (result) => {
             composeAudioPath = result.audio_path;
@@ -1962,6 +2019,7 @@ async function doComposePremium() {
         aspect_ratio: spec,
         generate_audio: S.vidGenAudio || false,
         resolution: resolution,
+        parent_task_id: composeParentId,
       }),
     });
     if (!composeRes.ok) { const text = await composeRes.text(); let msg = text; try { msg = JSON.parse(text).detail || msg; } catch(_) {} throw new Error(msg.slice(0, 200)); }
@@ -1986,7 +2044,10 @@ async function doComposePremium() {
       );
     });
   } catch(e) { showS('vidComposeStatus', 'error', `合成失败: ${e.message}`); }
-  finally { btn.disabled = false; btn.textContent = '🎬 合成视频'; }
+  finally {
+    wrap.style.display = 'none';
+    btn.disabled = false; btn.textContent = '🎬 合成视频';
+  }
 }
 
 // 上传自定义图片
@@ -2091,6 +2152,20 @@ function importTtsToCompose() {
   showS('vidComposeStatus', 'success', '已导入配音和字幕');
 }
 
+// 将 TTS 生成的镜头导入到精品模式分镜编辑器（覆盖现有）
+function importTtsShots() {
+  if (!S._pendingShots || !S._pendingShots.length) {
+    showS('vidTTSStatus', 'info', '请先生成配音');
+    return;
+  }
+  S.storyboard = { shots: [...S._pendingShots] };
+  S.vidSegmentDurations = S._pendingShots.map(s => s.srt_duration_sec || s.duration_sec || 0);
+  S._pendingShots = null;
+  document.getElementById('vidTtsShotsCount').textContent = '已导入';
+  renderStoryboard();
+  showS('vidTTSStatus', 'success', `已导入 ${S.storyboard.shots.length} 个镜头`);
+}
+
 // SRT 上传
 async function vidUploadSrtChange() {
   const input = document.getElementById('vidUploadSrt');
@@ -2132,7 +2207,7 @@ function removeUploadedImage(index) {
 // 合成
 async function doCompose() {
   const hasUploadedImages = S.uploadedImages && S.uploadedImages.length;
-  if (!hasUploadedImages) { showS('vidComposeStatus', 'error', '请先上传图片素材'); return; }
+  if (!hasUploadedImages) { showS('vidComposeStatus', 'error', '请先上传图片或视频素材'); return; }
   const btn = document.getElementById('btnCompose');
   btn.disabled = true; btn.textContent = '⏳ 合成中...';
   document.getElementById('vidComposeStatus').textContent = '';
@@ -2145,14 +2220,20 @@ async function doCompose() {
 
   const specRadio = document.querySelector('input[name="vidSpec"]:checked');
   const spec = specRadio ? specRadio.value : '9:16';
-  const composeMode = document.getElementById('vidCompose').value;
   const quality = document.getElementById('vidQuality').value === 'true';
   const imgSrc = S.uploadedImages;
   const hasUploadedAudio = S.uploadedAudio && S.uploadedAudio.length;
   const hasUploadedSrt = S.uploadedSrt && S.uploadedSrt.length;
-  const composeOpts = { images: imgSrc, audio_path: hasUploadedAudio ? S.uploadedAudio : (S.audioPath || ''), srt_path: hasUploadedSrt ? S.uploadedSrt : (S.srtPath || ''), task_id: S.scriptTaskId || 'compose_' + Date.now().toString(36), mode: composeMode, aspect_ratio: spec, quality_check: quality };
-  if (composeMode === 'fast') { composeOpts.transition = document.getElementById('vidTransition').value; }
-  else { composeOpts.ai_style = document.getElementById('vidAiStyle').value; }
+  const composeOpts = {
+    images: imgSrc,
+    audio_path: hasUploadedAudio ? S.uploadedAudio : (S.audioPath || ''),
+    srt_path: hasUploadedSrt ? S.uploadedSrt : (S.srtPath || ''),
+    aspect_ratio: spec,
+    resolution: document.getElementById('vidResolution').value,
+    transition: document.getElementById('vidTransition').value,
+    quality_check: quality,
+    parent_task_id: S.ttsTaskId || null,
+  };
 
   try {
     const res = await fetch(`${A8_API}/video/compose`, {
@@ -2160,41 +2241,34 @@ async function doCompose() {
       body: JSON.stringify(composeOpts),
     });
     if (!res.ok) { const text = await res.text(); let msg = text; try { msg = JSON.parse(text).detail || msg; } catch(_) {} throw new Error(msg.slice(0, 200)); }
+    const data = await res.json();
 
-    // SSE 流式读取进度
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = JSON.parse(line.slice(6));
-          if (data.error) { throw new Error(data.error); }
-          if (data.progress !== undefined) {
-            bar.style.width = (data.progress * 100) + '%';
-            stage.textContent = data.stage;
-          }
-          if (data.video_path) {
-            const vp = '/output/' + data.video_path.split('/').slice(-2).join('/');
-            document.getElementById('vidPlayer').src = vp;
-            document.getElementById('vidDownload').href = vp;
-            document.getElementById('vidPreview').style.display = '';
-            showS('vidComposeStatus', 'success', `视频合成完成 · ${data.duration_sec.toFixed(1)} 秒`);
-          }
-        }
-      }
-    }
+    // 轮询合成进度
+    await new Promise((resolve, reject) => {
+      pollWithProgress(data.data.task_id,
+        (pct, msg) => { bar.style.width = (pct * 100) + '%'; stage.textContent = msg; },
+        (result) => {
+          bar.style.width = '100%'; stage.textContent = '合成完成';
+          const vp = result.video_path;
+          document.getElementById('vidPlayer').src = vp;
+          document.getElementById('vidDownload').href = vp;
+          document.getElementById('vidPreview').style.display = '';
+          showS('vidComposeStatus', 'success', `视频合成完成 · ${(result.duration_sec || '?').toString()}s`);
+          document.getElementById('vidPlayer').scrollIntoView({ behavior: 'smooth' });
+          resolve();
+        },
+        reject
+      );
+    });
   } catch(e) { showS('vidComposeStatus', 'error', `合成失败: ${e.message}`); }
   finally {
     wrap.style.display = 'none';
-    btn.disabled = false; btn.textContent = '🎬 重新合成';
+    btn.disabled = false; btn.textContent = '🎬 合成视频';
   }
 }
+
+// ══════════════════════════════════════════════════════
+//  视频配置初始化
 
 // ══════════════════════════════════════════════════════
 //  视频配置初始化
@@ -2246,9 +2320,9 @@ function vidInitConfig() {
     <div style="display:flex;gap:10px;">
       <div id="vidUploadImagesZone" class="upload-zone" onclick="document.getElementById('vidUploadImages').click()" style="flex:1;">
         <div class="upload-zone-icon">🖼️</div>
-        <div class="upload-zone-title">上传图片素材</div>
-        <div class="upload-zone-hint">点击选择图片 · 支持 JPG/PNG/WebP</div>
-        <input type="file" id="vidUploadImages" multiple accept="image/*" onchange="vidUploadImagesChange()" style="display:none;">
+        <div class="upload-zone-title">上传图片/视频素材</div>
+        <div class="upload-zone-hint">点击选择 · 支持 JPG/PNG/MP4</div>
+        <input type="file" id="vidUploadImages" multiple accept="image/*,video/*" onchange="vidUploadImagesChange()" style="display:none;">
       </div>
       <div style="flex:1;display:flex;flex-direction:column;">
         <div class="upload-zone" onclick="document.getElementById('vidUploadAudio').click()" id="vidAudioZone" style="flex:1;">
@@ -2541,6 +2615,75 @@ async function downloadAllImages() {
     }
     return;
   }
+}
+
+// ══════════════════════════════════════════════════════
+//  任务历史
+// ══════════════════════════════════════════════════════
+let histPage = 0;
+const HIST_PS = 15;
+const TYPE_LABEL = { scrape:'📦 采集', analysis:'📊 分析', strategy:'🎯 策略', image_gen:'🖼️ 生图', script_gen:'📝 脚本', tts_gen:'🔊 配音', video_compose:'🎬 合成', video_shot:'🎥 分镜' };
+const STATUS_BADGE = { PENDING:'⏳', RUNNING:'🔄', SUCCESS:'✅', FAILURE:'❌' };
+const STATUS_COLOR = { PENDING:'#888', RUNNING:'#2196F3', SUCCESS:'#4CAF50', FAILURE:'#f44336' };
+
+async function loadHistory() {
+  const type = document.getElementById('histType').value;
+  const status = document.getElementById('histStatusFilter').value;
+  const params = new URLSearchParams({ limit: HIST_PS, offset: histPage * HIST_PS });
+  if (type) params.set('type', type);
+  if (status) params.set('status', status);
+  try {
+    const res = await fetch(`${A8_API}/tasks?${params}`);
+    const payload = await res.json();
+    if (!payload.data) { showS('histStatusMsg','error','无数据'); return; }
+    const d = payload.data;
+    document.getElementById('histBody').innerHTML = (d.tasks||[]).map(t => {
+      const preview = t.status === 'SUCCESS' ? _histPreview(t) : (t.error_message || '—');
+      return `<tr style="border-bottom:1px solid var(--border);color:var(--text);">
+        <td style="padding:6px 8px;white-space:nowrap;font-size:11px;color:var(--text2);">${(t.created_at||'').slice(0,16).replace('T',' ')}</td>
+        <td style="padding:6px 8px;white-space:nowrap;font-size:11px;font-family:monospace;color:var(--text3);">${(t.task_id||'').slice(0,8)}</td>
+        <td style="padding:6px 8px;white-space:nowrap;">${TYPE_LABEL[t.type]||t.type||'—'}</td>
+        <td style="padding:6px 8px;white-space:nowrap;font-weight:600;color:${STATUS_COLOR[t.status]||'#888'};">${STATUS_BADGE[t.status]||''} ${t.status}</td>
+        <td style="padding:6px 8px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;" title="${esc(preview)}">${esc(preview)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text3);">暂无任务记录</td></tr>';
+    const totalPages = Math.ceil((d.total||0) / HIST_PS);
+    document.getElementById('histPageInfo').textContent = `共 ${d.total} 条 · 第 ${histPage+1}/${totalPages||1} 页`;
+    document.getElementById('histPrev').disabled = histPage <= 0;
+    document.getElementById('histNext').disabled = histPage >= totalPages - 1;
+    showS('histStatusMsg','');
+  } catch(e) {
+    showS('histStatusMsg','error','加载失败: ' + e.message);
+  }
+}
+
+function _histPreview(t) {
+  try {
+    if (t.type === 'scrape') return `采集完成 · ${t.result_json?.image_count||0} 张`;
+    if (t.type === 'video_compose') return `视频已生成 · ${t.result_json?.duration_sec?.toFixed(1)||'?'}秒`;
+    if (t.type === 'script_gen') return '脚本已生成';
+    if (t.type === 'tts_gen') return '配音已生成';
+    if (t.type === 'analysis') return '分析完成';
+    if (t.type === 'strategy') return '策略已生成';
+    if (t.type === 'image_gen') return '图片已生成';
+    return '完成';
+  } catch(_) { return '完成'; }
+}
+
+function prevPage() { if (histPage > 0) { histPage--; loadHistory(); } }
+function nextPage() { histPage++; loadHistory(); }
+
+function exportCSV() {
+  const type = document.getElementById('histType').value;
+  const status = document.getElementById('histStatusFilter').value;
+  const params = new URLSearchParams();
+  if (type) params.set('type', type);
+  if (status) params.set('status', status);
+  const a = document.createElement('a');
+  a.href = `${A8_API}/tasks/export?${params}`;
+  a.download = 'tasks_export.csv';
+  a.click();
+  showS('histStatusMsg','success','导出中…');
 }
 
 // 初始化

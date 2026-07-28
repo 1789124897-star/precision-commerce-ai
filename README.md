@@ -112,7 +112,8 @@ app/
 ├── schemas/           Pydantic 请求/响应模型
 ├── core/              基础设施（配置/数据库/Celery/路径/日志）
 ├── repositories/      数据访问封装
-└── workers/           Celery 应用入口
+└── tasks/             Celery 任务定义（五队列路由）
 static/                前端页面（index.html）
+logs/                  四层分离日志（app/error/task）
 output/                产物目录（图片/音频/视频）
 ```

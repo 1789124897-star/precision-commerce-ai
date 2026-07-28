@@ -8,10 +8,9 @@
 import pytest
 from pydantic import ValidationError
 
-from app.api.routes.analysis import submit_analysis, do_submit_strategies
+from app.api.routes.analysis import do_submit_strategies, submit_analysis
 from app.models import Task
 from app.schemas.analysis import AnalysisSubmitRequest, StrategyRequest
-
 
 # ── AnalysisSubmitRequest Pydantic 模型校验 ──
 
