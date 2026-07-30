@@ -27,56 +27,6 @@ class SeedanceService:
             except Exception:
                 pass
 
-    # ── 图床上传 ──
-
-    async def _upload_to_smms(self, image_path: Path) -> str:
-        """上传本地图片到 sm.ms，返回公网 URL。"""
-        logger.info(f"上传图片到 sm.ms: {image_path}")
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            with open(image_path, "rb") as f:
-                resp = await client.post(
-                    "https://smms.app/api/v2/upload",
-                    files={"smfile": (image_path.name, f, "image/jpeg")},
-                    headers={"User-Agent": "Precision-Commerce-AI/1.0"},
-                )
-            data = resp.json()
-            if data.get("success"):
-                url: str = data["data"]["url"]
-                logger.info(f"上传成功: {url}")
-                return url
-            msg = data.get("message", "unknown")
-            logger.warning(f"sm.ms 上传失败 ({msg})，尝试 imgse...")
-            raise RuntimeError(f"sm.ms upload failed: {msg}")
-
-    async def _upload_to_imgse(self, image_path: Path) -> str:
-        """imgse.com 备用图床。"""
-        async with httpx.AsyncClient(timeout=30) as client:
-            with open(image_path, "rb") as f:
-                resp = await client.post(
-                    "https://imgse.com/api/v1/upload",
-                    files={"image": (image_path.name, f, "image/jpeg")},
-                    headers={"User-Agent": "Precision-Commerce-AI/1.0"},
-                )
-            data = resp.json()
-            if data.get("status") and data.get("data", {}).get("links", {}).get("url"):
-                url: str = data["data"]["links"]["url"]
-                logger.info(f"imgse 上传成功: {url}")
-                return url
-            raise RuntimeError(f"imgse upload failed: {resp.text[:200]}")
-
-    async def upload_to_public_url(self, image_path: Path) -> str:
-        """上传本地图片到公开 URL（sm.ms → imgse 备选）。"""
-        try:
-            return await self._upload_to_smms(image_path)
-        except Exception:
-            try:
-                return await self._upload_to_imgse(image_path)
-            except Exception:
-                raise RuntimeError(
-                    f"图片上传失败（sm.ms + imgse 均不可用）: {image_path}"
-                )
-
     # ── Seedance API 核心 ──
 
     async def submit_task(
@@ -135,7 +85,7 @@ class SeedanceService:
                 settings.SEEDANCE_VIDEO_URL,
                 json=payload,
                 headers={
-                    "Authorization": f"Bearer {settings.API_KEY}",
+                    "Authorization": f"Bearer {settings.VOLCANO_API_KEY}",
                     "Content-Type": "application/json",
                 },
             )
@@ -161,7 +111,7 @@ class SeedanceService:
             async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
                 resp = await client.get(
                     check_url,
-                    headers={"Authorization": f"Bearer {settings.API_KEY}"},
+                    headers={"Authorization": f"Bearer {settings.VOLCANO_API_KEY}"}
                 )
                 if resp.status_code != 200:
                     logger.warning(f"轮询 HTTP {resp.status_code}: {resp.text[:200]}")
@@ -195,44 +145,6 @@ class SeedanceService:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(resp.content)
         logger.info(f"视频已保存: {output_path} ({output_path.stat().st_size} bytes)")
-        return output_path
-
-    # ── 视频生成流程 ──
-
-    async def generate_clip(
-        self,
-        image_path: Path,
-        prompt: str,
-        aspect_ratio: str = "9:16",
-        duration_sec: float = 5.0,
-        shot_index: int = 0,
-        on_progress: Optional[Callable] = None,
-        generate_audio: bool = False,
-        resolution: str = "720p",
-    ) -> Path:
-        """完整流程：上传图片 → 提交 Seedance → 轮询 → 下载 → 返回本地视频路径。"""
-
-        def notify(s, d=""):
-            self._notify(s, d, shot_index, on_progress)
-
-        notify("上传图片", f"{image_path.name}")
-        public_url = await self.upload_to_public_url(image_path)
-
-        notify("提交生成", f"prompt: {prompt[:50]}...")
-        task_id = await self.submit_task(public_url, prompt, aspect_ratio, duration_sec, generate_audio=generate_audio, resolution=resolution)
-
-        notify("等待生成", f"task: {task_id}")
-        video_url = await self.poll_task(
-            task_id,
-            poll_interval=settings.SEEDANCE_POLL_INTERVAL,
-            poll_max=settings.SEEDANCE_POLL_MAX,
-        )
-
-        output_path = SEEDANCE_VIDEO_DIR / f"seedance_shot{shot_index}_{task_id[:8]}.mp4"
-        notify("下载视频", str(output_path.name))
-        await self.download_video(video_url, output_path)
-
-        notify("完成", str(output_path))
         return output_path
 
     async def generate_clip_from_url(
@@ -366,7 +278,7 @@ class SeedanceService:
             return await self.generate_clip_first_last_frame(
                 first_frame_url=first_frame_url,
                 last_frame_url=last_frame_url,
-                prompt=prompt,
+                prompt=prompt or "medium shot of product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens",
                 aspect_ratio=aspect_ratio,
                 duration_sec=duration_sec,
                 shot_index=shot_index,
