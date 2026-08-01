@@ -9,8 +9,10 @@ import random
 import time
 from pathlib import Path
 
+from app.core.paths import OUTPUT_DIR
+
 # cookie 文件放在 output 目录
-_COOKIE_FILE = Path(__file__).resolve().parent.parent.parent / "output" / "1688_cookies.json"
+_COOKIE_FILE = OUTPUT_DIR / "1688_cookies.json"
 _MAX_AGE_HOURS = 12
 
 
