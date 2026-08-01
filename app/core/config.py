@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     DATABASE_URL: str = "mysql+aiomysql://root:root@localhost:3306/ecommerce_unified"
 
+    # 1688 反爬
+    ALIBABA_1688_EMAIL: str = ""
+    ALIBABA_1688_PASSWORD: str = ""
+
+    # 代理
+    PROXY_PROVIDER: str = ""
+    PROXY_HOST: str = ""
+    PROXY_PORT: str = ""
+    PROXY_USERNAME: str = ""
+    PROXY_PASSWORD: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

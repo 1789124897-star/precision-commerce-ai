@@ -13,6 +13,14 @@ from DrissionPage import ChromiumOptions, ChromiumPage
 
 from app.core.config import settings
 from app.core.paths import IMAGE_DIR, SCRAPER_CONFIG
+from app.services.anti_crawl import (
+    ensure_fresh_cookies,
+    load_cookies,
+    random_delay,
+    retry,
+    save_cookies,
+)
+from app.services.proxy_manager import ProxyManager
 
 logger = logging.getLogger(__name__)
 
@@ -24,49 +32,88 @@ class ImageScraper:
 
     def __init__(self):
         self.images: list[dict] = []
+        self.proxy_manager = ProxyManager(
+            settings.PROXY_PROVIDER,
+            settings.PROXY_HOST,
+            settings.PROXY_PORT,
+            settings.PROXY_USERNAME,
+            settings.PROXY_PASSWORD,
+        )
+        self._proxy = ""
 
     def scrape(self, product_url: str, task_id: str) -> dict:
         task_dir = IMAGE_DIR / task_id
         task_dir.mkdir(parents=True, exist_ok=True)
         logger.info("开始采集 %s -> %s", task_id, task_dir)
 
-        options = ChromiumOptions()
-        options.set_browser_path(settings.EDGE_PATH)
-        page = ChromiumPage(options)
+        self.images = []
 
-        try:
-            page.get(product_url)
-            time.sleep(2)
-            logger.info("页面标题: %s", page.title)
+        def _run_scrape():
+            """可重试的爬取部分，包在 retry 里。"""
+            self.images = []
 
-            product_name = page.title or ""
-            for suffix in ["-阿里巴巴", "- 阿里巴巴", "-1688", "- 1688", "| 1688"]:
-                if suffix in product_name:
-                    product_name = product_name.split(suffix)[0].strip()
-                    break
+            options = ChromiumOptions()
+            options.set_browser_path(settings.EDGE_PATH)
 
-            if "404" in (page.title or "") or "错误" in (page.title or ""):
-                raise RuntimeError(f"页面无法访问（{page.title}），请检查链接是否正确")
+            self._proxy = self.proxy_manager.get_next()
+            if self._proxy:
+                options.set_proxy(self._proxy)
 
-            if page.ele(SCRAPER_CFG["selectors"]["v3"]["main_image"]):
-                version = "v3"
-            elif page.ele(SCRAPER_CFG["selectors"]["v2"]["main_image"]):
-                version = "v2"
-            else:
-                version = "v1"
-            logger.info("检测到%s页面", version.upper())
+            page = ChromiumPage(options)
 
-            self._download_main_images(page, task_dir, version)
-            self._scroll_to_bottom(page)
-            self._download_sku_images(page, task_dir, version)
-            self._download_detail_images(page, task_dir, version)
-        except Exception:
-            logger.exception("采集过程中发生未预期错误")
-            if not self.images:
-                shutil.rmtree(task_dir, ignore_errors=True)
-            raise
-        finally:
-            page.quit()
+            try:
+                # ── 0. 刷新 + 注入 cookie ──
+                ensure_fresh_cookies(
+                    page,
+                    settings.ALIBABA_1688_EMAIL,
+                    settings.ALIBABA_1688_PASSWORD,
+                )
+                load_cookies(page)
+
+                # ── 1. 访问页面 ──
+                page.get(product_url)
+                random_delay()
+                logger.info("页面标题: %s", page.title)
+
+                product_name = page.title or ""
+                for suffix in ["-阿里巴巴", "- 阿里巴巴", "-1688", "- 1688", "| 1688"]:
+                    if suffix in product_name:
+                        product_name = product_name.split(suffix)[0].strip()
+                        break
+
+                if "404" in (page.title or "") or "错误" in (page.title or ""):
+                    raise RuntimeError("页面无法访问（" + str(page.title) + "），请检查链接是否正确")
+
+                # ── 2. 检测页面版本 ──
+                if page.ele(SCRAPER_CFG["selectors"]["v3"]["main_image"]):
+                    version = "v3"
+                elif page.ele(SCRAPER_CFG["selectors"]["v2"]["main_image"]):
+                    version = "v2"
+                else:
+                    version = "v1"
+                logger.info("检测到" + version.upper() + "页面")
+
+                # ── 3. 抓图 ──
+                self._download_main_images(page, task_dir, version)
+                random_delay(1.0, 2.0)
+                self._scroll_to_bottom(page)
+                random_delay(1.0, 2.0)
+                self._download_sku_images(page, task_dir, version)
+                random_delay(1.0, 2.0)
+                self._download_detail_images(page, task_dir, version)
+
+                return product_name
+
+            except Exception:
+                logger.exception("采集过程中发生未预期错误")
+                if not self.images:
+                    shutil.rmtree(task_dir, ignore_errors=True)
+                raise
+            finally:
+                save_cookies(page)
+                page.quit()
+
+        product_name = retry(_run_scrape)
 
         if not self.images:
             raise RuntimeError("未采集到任何图片，页面结构可能已变更或触发反爬")
@@ -188,7 +235,7 @@ class ImageScraper:
             last_height = page.run_js("return document.body.scrollHeight;")
             while time.time() - start < SCRAPER_CFG["download"]["scroll_timeout"]:
                 page.scroll.to_bottom()
-                time.sleep(1)
+                random_delay(0.5, 1.0)
                 current = page.run_js("return document.body.scrollHeight;")
                 if current == last_height:
                     break
@@ -197,13 +244,14 @@ class ImageScraper:
         except Exception:
             logger.warning("滚动异常，跳过", exc_info=True)
 
-    @staticmethod
-    def _download(url: str, save_dir: Path, filename: str) -> bool:
+    def _download(self, url: str, save_dir: Path, filename: str) -> bool:
         filename = re.sub(r'[\\/:*?"<>|]', "_", filename)
         try:
+            proxy = self._proxy
+            proxies = {"http": proxy, "https": proxy} if proxy else {"http": "", "https": ""}
             resp = requests.get(
                 url, stream=True, timeout=SCRAPER_CFG["download"]["timeout"], headers=SCRAPER_CFG["request"]["headers"],
-                proxies={"http": "", "https": ""},
+                proxies=proxies,
             )
             resp.raise_for_status()
             if "text/html" in resp.headers.get("Content-Type", ""):
