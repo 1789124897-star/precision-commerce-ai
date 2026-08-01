@@ -30,10 +30,9 @@ def scrape_product_task(self, task_id: str):
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
             raise ValueError(f"任务不存在: {task_id}")
-        request_json = dict(task.request_json or {})
+        url = dict(task.request_json or {})["url"]
         db.commit()
 
-    url = request_json.get("url", "")
     try:
         result = ImageScraper().scrape(url, task_id)
     except Exception as e:

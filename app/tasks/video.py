@@ -6,7 +6,7 @@ from app.core.database import SyncSession
 from app.models import Video
 from app.repositories.task_repo import TaskRepo
 from app.services.seedance_service import SeedanceService
-from app.services.video_composer import composer
+from app.services.video_composer import VideoComposer
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,27 @@ def _progress_callback(task_id: str):
     return on_progress
 
 
+def _shot_progress_callback(task_id: str):
+    """返回 on_progress(stage, detail) 回调，供 Seedance 分镜任务复用。"""
+    import time
+
+    _last_ts = [0.0]
+
+    def on_progress(stage: str, detail: str):
+        now = time.monotonic()
+        if now - _last_ts[0] < 1.0:
+            return
+        _last_ts[0] = now
+        try:
+            with SyncSession() as db:
+                TaskRepo.set_result(db, task_id, {"stage": stage, "detail": detail})
+                db.commit()
+        except Exception:
+            logger.exception("写入分镜进度失败")
+
+    return on_progress
+
+
 @celery_app.task(
     bind=True,
     name="compose_video",
@@ -61,11 +82,7 @@ def compose_video_task(self, task_id: str):
         db.commit()
 
     try:
-        result = composer.compose(
-            **request_json,
-            task_id=task_id,
-            on_progress=_progress_callback(task_id),
-        )
+        result = VideoComposer().compose(**request_json, task_id=task_id, on_progress=_progress_callback(task_id))
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
@@ -80,7 +97,7 @@ def compose_video_task(self, task_id: str):
                 Video(
                     task_id=task_id,
                     video_type="compose",
-                    source_images=str(request_json.get("image_urls", [])),
+                    source_images=str(request_json.get("images", [])),
                     audio_path=request_json.get("audio_path", ""),
                     srt_path=request_json.get("srt_path", ""),
                     output_path=result.get("video_path", ""),
@@ -107,7 +124,9 @@ def compose_video_task(self, task_id: str):
     retry_jitter=True,
 )
 def compose_premium_video_task(self, task_id: str):
+
     logger.info("开始 task_id=%s", task_id)
+
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
@@ -116,11 +135,7 @@ def compose_premium_video_task(self, task_id: str):
         db.commit()
 
     try:
-        result = composer.compose_premium(
-            **request_json,
-            task_id=task_id,
-            on_progress=_progress_callback(task_id),
-        )
+        result = VideoComposer().compose_premium(**request_json, task_id=task_id, on_progress=_progress_callback(task_id))
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
@@ -163,7 +178,9 @@ def compose_premium_video_task(self, task_id: str):
     retry_jitter=True,
 )
 def generate_shot_task(self, task_id: str):
+
     logger.info("开始 task_id=%s", task_id)
+    
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
@@ -171,26 +188,16 @@ def generate_shot_task(self, task_id: str):
         request_json = dict(task.request_json or {})
         db.commit()
 
-    def shot_progress(stage: str, detail: str):
-        try:
-            with SyncSession() as db:
-                TaskRepo.set_result(db, task_id, {"stage": stage, "detail": detail})
-                db.commit()
-        except Exception:
-            logger.exception("写入分镜进度失败")
-
     try:
-        clip_path = SeedanceService().generate_shot_sync(
-            **request_json,
-            on_progress=shot_progress,
-        )
-        video_path = "/" + str(clip_path).replace("\\", "/")
+        clip_path = SeedanceService().generate_shot_sync(**request_json, on_progress=_shot_progress_callback(task_id))
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
             TaskRepo.set_failure(db, task_id, str(e))
             db.commit()
         raise
+
+    video_path = "/" + str(clip_path).replace("\\", "/")
 
     with SyncSession() as db:
         TaskRepo.set_success(

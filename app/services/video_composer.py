@@ -29,7 +29,7 @@ from app.services.shot_grouper import ShotGrouper
 
 logger = logging.getLogger(__name__)
 
-# 中文字体路径 (相对于 app 包)
+# 中文字体路径
 _FONT_DIRS = [
     Path(__file__).resolve().parent.parent.parent / "static" / "Z-SIMHEI.TTF",
     Path("static/Z-SIMHEI.TTF"),
@@ -43,14 +43,14 @@ class VideoComposer:
     # ── 共享工具 ──
 
     def _report(self, pct: float, stage: str, on_progress=None):
-        """统一的进度报告器，供 compose / compose_premium 共用。"""
+        """进度回调，compose / compose_premium 共用"""
         if on_progress:
             on_progress(pct, stage)
         logger.info(f"[{pct*100:.0f}%] {stage}")
 
     @staticmethod
     def _make_encode_logger(encode_start: float, encode_end: float, on_progress=None):
-        """工厂：创建编码进度 Logger，供 compose / compose_premium 共用。"""
+        """编码进度 Logger 工厂"""
         class _EncodeLogger(ProgressBarLogger):
             total_frames = 0
             def bars_callback(self, bar, attr, value, old_value=None):
@@ -64,7 +64,7 @@ class VideoComposer:
 
     def compose(
         self,
-        image_urls: list[str],
+        images: list[str],
         audio_path: str,
         srt_path: str,
         task_id: str,
@@ -74,29 +74,24 @@ class VideoComposer:
         quality_check: bool = True,
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> dict:
-        """
-        合成 Ken Burns 视频。
+        """快速模式：图片 + 音频 + 字幕 → MP4
 
-        Args:
-            quality_check: 启用后使用 ffprobe 验证输出视频
-            on_progress: 可选进度回调 (progress 0~1, stage_text)
-
-        Returns:
-            {"video_path": str, "duration_sec": float, "quality": dict|None}
+        on_progress: 进度回调 (0~1, stage_text)
+        返回: {"video_path", "duration_sec", "quality"}
         """
         def report(p, s):
             self._report(p, s, on_progress)
 
-        # 解析分辨率
+        # 解析宽高比
         w, h = self._parse_aspect(aspect_ratio, resolution)
-        report(0.0, f"加载 {len(image_urls)} 张图片...")
+        report(0.0, f"加载 {len(images)} 张图片...")
 
         # 下载/加载图片
-        images = self._load_local_images(image_urls)
+        images = self._load_local_images(images)
         if not images:
             raise ValueError("没有可用的图片素材")
 
-        # 加载音频（可选）
+        # 加载音频
         report(0.05, "加载音频...")
         if audio_path:
             audio_local = self._to_local(audio_path)
@@ -104,26 +99,26 @@ class VideoComposer:
             total_duration = audio.duration
             has_audio = True
         else:
-            # 无音频：每张图默认 5s，总时长由图片数决定
-            total_duration = len(images) * 5.0
+            # 无音频：每张图 2s
+            total_duration = len(images) * 2.0
             audio = None
             has_audio = False
-            logger.info(f"无音频，静音视频 · {len(images)} 张图 × 5s = {total_duration:.1f}s")
+            logger.info(f"无音频，静音视频 · {len(images)} 张图 × 2s = {total_duration:.1f}s")
 
-        # 智能图片调度：最少不限（全部展示），最多 6s/张（不足时循环）
+        # 每张图最多 6s，不够就循环
         MAX_PER_IMG = 6.0
         candidate = total_duration / len(images)
         if candidate > MAX_PER_IMG:
-            # 图太少，每张最多放 6s，循环至覆盖音频
+            # 图不够 → 循环
             per_img = MAX_PER_IMG
             loop_images = True
         else:
-            # 图够多或刚好，每张按比例均分
+            # 图够多 → 均分
             per_img = candidate
             loop_images = False
         logger.info(f"音频 {total_duration:.1f}s, {len(images)} 张图, 每张 {per_img:.1f}s, 循环={loop_images}")
 
-        # 循环生成剪辑直到覆盖音频
+        # 逐图生成 Ken Burns 动画
         report(0.1, f"生成动画 (每张 {per_img:.1f}s)...")
         clips: list = []
         remaining = total_duration
@@ -141,7 +136,7 @@ class VideoComposer:
             else:
                 report(0.1 + 0.6 * (1 - remaining / total_duration), f"动画 {img_idx}/{len(images)}")
 
-        # 拼接视频轨道
+        # 拼接视频
         report(0.7, "拼接音画...")
         video = concatenate_videoclips(clips, method="compose")
         if has_audio:
@@ -162,7 +157,7 @@ class VideoComposer:
             except Exception as e:
                 logger.warning(f"字幕叠加失败，跳过: {e}")
 
-        # 导出 — 自定义进度 Logger 实时反馈编码百分比
+        # 编码导出
         out_name = f"{task_id}.mp4"
         out_path = VIDEO_DIR / out_name
         report(0.85, "正在编码视频...")
@@ -200,7 +195,7 @@ class VideoComposer:
     # ── 私有方法 ──
 
     def _parse_aspect(self, ratio: str, resolution: str = "720p") -> tuple[int, int]:
-        """解析宽高比 + 分辨率 → (w, h)。短边 = resolution 像素，长边按比例。"""
+        """宽高比 + 分辨率 → (w, h)"""
         base_map = {"480p": 480, "720p": 720, "1080p": 1080}
         short = base_map.get(resolution, 720)
         parts = ratio.replace(":", "/").split("/")
@@ -216,14 +211,14 @@ class VideoComposer:
         return (short, short)
 
     def _to_local(self, url_or_path: str) -> Path:
-        """将 /output/... 路径转为本地绝对路径"""
+        """/output/... 路径 → 本地绝对路径"""
         if url_or_path.startswith("/output/"):
             local = url_or_path[len("/output/"):]
             return OUTPUT_DIR / local
         return Path(url_or_path)
 
     def _cleanup_temp_files(self):
-        """清理 MoviePy 遗留的临时文件（如 TEMP_MPY_wvf_snd.mp4）"""
+        """清理 MoviePy 临时文件"""
         cwd = Path.cwd()
         for pattern in ["TEMP_MPY_*", "temp_mpy_*"]:
             for f in cwd.glob(pattern):
@@ -234,7 +229,7 @@ class VideoComposer:
                     pass
 
     def _check_quality(self, video_path: Path, expected_duration: float) -> dict:
-        """使用 ffprobe 验证输出视频质量。"""
+        """ffprobe 验证视频质量"""
         result: dict = {
             "passed": True,
             "warnings": [],
@@ -281,7 +276,7 @@ class VideoComposer:
         return result
 
     def _load_local_images(self, urls: list[str]) -> list[Path]:
-        """从 URL 路径加载本地图片，不存在的跳过"""
+        """URL → 本地路径，不存在的跳过"""
         result = []
         for url in urls:
             local = self._to_local(url)
@@ -292,7 +287,7 @@ class VideoComposer:
         return result
 
     def _ken_burns_clip(self, img_path: Path, w: int, h: int, duration: float) -> VideoClip:
-        """Soft-blur background + centered Ken Burns animation."""
+        """模糊背景 + Ken Burns 缩放动画"""
         pil_img = Image.open(img_path).convert("RGB")
         iw, ih = pil_img.size
 
@@ -328,7 +323,7 @@ class VideoComposer:
 
     @staticmethod
     def _apply_transition(clip: VideoClip, transition: str) -> VideoClip:
-        """对非首帧 clip 添加入场转场效果。"""
+        """非首帧 clip 添加转场"""
         if transition == "slide":
             direction = random.choice(["left", "right", "top", "bottom"])
             return clip.with_effects([vfx.SlideIn(0.4, direction)])
@@ -361,7 +356,7 @@ class VideoComposer:
         return tmp
 
     def _render_srt(self, srt_path: Path, w: int, h: int) -> list:
-        """Parse SRT and generate subtitle ImageClip list."""
+        """解析 SRT → MoviePy 字幕 clip 列表"""
         if not srt_path.exists():
             return []
 
@@ -385,10 +380,10 @@ class VideoComposer:
         if not subtitles:
             return []
 
-        # 字号自适应：取短边的 7.8%，兼容 9:16 / 16:9 / 1:1
+        # 字号：短边的 7.8%
         font_size = int(min(w, h) * 0.078)
         font = self._load_font(font_size)
-        # 阴影偏移：字号 4%，至少 2px
+        # 阴影：字号 4%，至少 2px
         shadow = max(2, int(font_size * 0.04))
 
         clips = []
@@ -407,9 +402,9 @@ class VideoComposer:
             img.save(str(tmp))
 
             sub_clip = ImageClip(str(tmp), duration=duration)
-            # 字幕垂直定位：不同宽高比适配不同平台底部 UI
+            # 字幕垂直位置：不同宽高比适配不同平台底部 UI
             if w < h:
-                # 竖屏 9:16 → 抖音，留 18% 避开购物车/描述
+                # 竖屏 9:16 → 抖音，留 18% 
                 y_pos = int(h * 0.82)
             elif w > h:
                 # 横屏 16:9 → YouTube，留 12%
@@ -436,10 +431,7 @@ class VideoComposer:
         return ImageFont.load_default()
 
     def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int, shadow: int = 2) -> Optional[Image.Image]:
-        """渲染中文字幕图片：白字 + 黑阴影，无背景条。
-
-        shadow: 阴影偏移量 px，按字号 4% 计算。
-        """
+        """字幕渲染：白字黑边，无背景条"""
         margin = int(max_w * 0.04)  # 左右留白 4%
         lines = []
         current = ""
@@ -456,7 +448,7 @@ class VideoComposer:
         if not lines:
             return None
 
-        # 行高：字高 + 30% 行间距
+        # 行高：字高 + 30% 间距
         line_h = font.getbbox("测")[3] + int(font.size * 0.3)
         img_h = line_h * len(lines) + margin
         img_w = max_w
@@ -487,19 +479,16 @@ class VideoComposer:
         on_progress: Optional[Callable[[float, str], None]] = None,
         segment_durations: Optional[list[float]] = None,
     ) -> dict:
-        """精铺模式合成：按分镜列表生成场景展示视频。
+        """精品模式：按分镜列表逐镜生成视频
 
-        Args:
-            shots: [{image_index, scene_prompt, duration_sec, overlay_text}, ...]
-            images: 图片 URL 列表
-            segment_durations: 每段口播的实际 TTS 时长（秒），非空时自动启动镜头组分组
+        segment_durations: TTS 实际时长，非空时自动合并短段为镜头组（≥4s）
         """
         def report(p, s):
             self._report(p, s, on_progress)
 
         w, h = self._parse_aspect(aspect_ratio, resolution)
 
-        # 检测是否所有镜头都已预生成视频 — 是则跳过图片加载（无声模式）
+        # 预生成分镜到齐 → 跳过图片加载
         all_pregen = all(s.get("clip_path", "") for s in shots)
         if all_pregen:
             local_images = []
@@ -508,7 +497,7 @@ class VideoComposer:
             report(0.0, f"加载 {len(images)} 张图片...")
             local_images = self._load_local_images(images)
 
-        # 加载音频（可选）
+        # 加载音频
         report(0.03, "加载音频...")
         if audio_path:
             audio_local = self._to_local(audio_path)
@@ -518,17 +507,17 @@ class VideoComposer:
         else:
             audio = None
             has_audio = False
-            # 无外部音频时，用分镜时长之和作为总时长（Seedance 原生音频随视频片段保留）
-            total_duration = 0  # 后续在分镜循环中累加
+            # 无外部音频，时长按分镜累加
+            total_duration = 0
 
-        # 按 shots 生成片段（Seedance AI 图生视频，失败回退 Ken Burns）
+        # 逐镜生成：Seedance → 失败回退 Ken Burns
         total_shots = len(shots)
         total_design_dur = sum(s.get("duration_sec", 5) for s in shots)
         speed = total_design_dur / total_duration if total_duration > 0 else 1.0
         logger.info(f"精铺: {total_shots} 镜, 设计时长 {total_design_dur:.1f}s, 音频 {total_duration:.1f}s, 速率 {speed:.2f}")
 
         # ── 镜头组分组 ──
-        # 有实际 TTS 时长时，将短段合并为镜头组，确保每组 ≥4s
+        # 有 TTS 时长时，短段合并为镜头组（≥4s）
         if segment_durations:
             grouper = ShotGrouper(min_dur=4.0, max_dur=12.0)
             shot_groups = grouper.group(shots, segment_durations)
@@ -537,7 +526,7 @@ class VideoComposer:
             iterate_over = shot_groups
             use_groups = True
         else:
-            # 无 TTS 时长时退化为原有 1:1 模式，但依然保证 ≥4s 底限
+            # 无 TTS 时长 → 1:1 模式，底限 4s
             iterate_over = [{
                 "shots": [s],
                 "tts_duration": s.get("duration_sec", 5),
@@ -557,14 +546,14 @@ class VideoComposer:
             # 镜头组直接用已算好的 seedance_dur（已在 [4, 12] 内）
             dur = float(group["seedance_dur"])
             scene_prompt = group.get("scene_prompt", "")
-            scene_prompt_en = group.get("scene_prompt_en", "")  # 英文版 → Seedance
-            seedance_prompt = scene_prompt_en or scene_prompt           # 优先英文，兜底中文
+            scene_prompt_en = group.get("scene_prompt_en", "")  # 英文 → Seedance
+            seedance_prompt = scene_prompt_en or scene_prompt  # 优先英文，兜底中文
             image_url = group.get("image_url", "")
             first_frame_url = group.get("first_frame_url", "")
             last_frame_url = group.get("last_frame_url", "")
             group_mode = group.get("mode", "single")
             segment_count = len(group.get("shots", [group]))
-            # 预生成 clip：仅单段模式下使用
+            # 单段模式优先用预生成 clip
             pre_generated = group["shots"][0].get("clip_path", "") if group["shots"] else ""
 
             label = f"镜组{i+1}/{total_items}" if use_groups else f"分镜{i+1}/{total_items}"
@@ -573,7 +562,7 @@ class VideoComposer:
 
             clip = None
 
-            # 优先使用已预生成的分镜视频（仅单段模式）
+            # 预生成 clip 存在则直接复用
             if pre_generated:
                 pre_path = self._to_local(pre_generated)
                 if pre_path.exists():
@@ -607,7 +596,7 @@ class VideoComposer:
                 except Exception as e:
                     logger.warning(f"{label} 首尾帧失败: {e}")
 
-            # Seedance 图生视频（单图模式），失败回退 Ken Burns
+            # Seedance 图生视频，失败回退 Ken Burns
             if clip is None and image_url and image_url.startswith("http"):
                 try:
                     seedance_path = asyncio.run(SeedanceService().generate_clip_from_url(
@@ -626,7 +615,7 @@ class VideoComposer:
                 except Exception as e:
                     logger.warning(f"{label} 图生视频失败: {e}")
 
-            # 纯文生视频：无参考图，仅凭场景描述生成
+            # 纯文生视频：无参考图
             if clip is None and seedance_prompt:
                 try:
                     seedance_path = asyncio.run(SeedanceService().generate_clip_text_only(
@@ -643,15 +632,15 @@ class VideoComposer:
                 except Exception as e:
                     logger.warning(f"{label} 文生视频失败: {e}")
 
-            # Seedance 未启用或失败 → Ken Burns 回退
+            # Seedance 失败 → Ken Burns 回退
             if clip is None:
                 if local_images:
-                    # 镜头组用第一个 shot 的 image_index
+                    # 镜头组取第一个 shot 的图片索引
                     first_shot = group["shots"][0] if group.get("shots") else group
                     img_idx = min(first_shot.get("image_index", 0), len(local_images) - 1)
                     clip = self._ken_burns_clip(local_images[img_idx], w, h, dur)
                 else:
-                    # 既无 URL 也无本地图片：生成纯色占位
+                    # 无 URL 也无本地图片 → 纯色占位
                     logger.warning(f"{label} 无图片可用，使用占位")
                     clip = self._ken_burns_clip(
                         self._make_placeholder(w, h), w, h, dur
@@ -662,11 +651,11 @@ class VideoComposer:
             clips.append(clip)
             time_elapsed += dur
 
-        # 无外部音频时，用实际拼接时长作为总时长（Seedance 原生音频随视频保留）
+        # 无外部音频，用实际拼接时长
         if not has_audio:
             total_duration = time_elapsed
 
-        # 拼接
+        # 拼接视频
         report(0.62, "拼接音画...")
         video = concatenate_videoclips(clips, method="compose")
         video = video.resized((w, h))
@@ -687,7 +676,7 @@ class VideoComposer:
                 except Exception as e:
                     logger.warning(f"字幕叠加失败: {e}")
 
-        # 导出
+        # 编码导出
         out_name = f"{task_id}.mp4"
         out_path = VIDEO_DIR / out_name
         report(0.82, "正在编码视频...")
@@ -717,6 +706,3 @@ class VideoComposer:
         quality = self._check_quality(out_path, total_duration)
         return {"video_path": video_url, "duration_sec": round(total_duration, 1), "quality": quality}
 
-
-# 全局单例
-composer = VideoComposer()

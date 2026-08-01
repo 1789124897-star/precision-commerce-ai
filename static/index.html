@@ -596,9 +596,6 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
         <button class="btn btn-icon" id="btnScrape" onclick="doScrape()">→</button>
       </div>
       <div class="status" id="scrapeStatus"></div>
-      <div id="scrapeDone" style="display:none;margin-top:10px;">
-        <button class="btn btn-ghost" style="width:100%;" onclick="openScrapeFolder()">📁 打开采集文件夹</button>
-      </div>
     </div>
   </div>
 
@@ -996,7 +993,6 @@ async function doScrape() {
   const url = document.getElementById('url1688').value.trim();
   if (!url) { showS('scrapeStatus', 'error', '请先粘贴 1688 商品链接'); return; }
   const btn = document.getElementById('btnScrape'); btn.disabled = true;
-  document.getElementById('scrapeDone').style.display = 'none';
   showS('scrapeStatus', 'info', '正在提交采集任务...');
 
   try {
@@ -1027,7 +1023,6 @@ async function doScrape() {
           }
           renderImageBank();
           showS('scrapeStatus', 'success', `采集完成 · ${d.result.image_count} 张图片`);
-          document.getElementById('scrapeDone').style.display = '';
           btn.disabled = false;
         } else if (d.status === 'FAILURE') {
           clearInterval(poll);
@@ -1037,13 +1032,6 @@ async function doScrape() {
       } catch(e) { clearInterval(poll); showS('scrapeStatus', 'error', `轮询失败: ${e.message}`); btn.disabled = false; }
     }, 1500);
   } catch(e) { showS('scrapeStatus', 'error', `采集失败: ${e.message}`); btn.disabled = false; }
-}
-
-async function openScrapeFolder() {
-  if (!S.scrapedFolder) { showS('scrapeStatus', 'error', '请先采集商品'); return; }
-  try {
-    await fetch(`${A8_API}/scraper/open-folder`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({folder: S.scrapedFolder}) });
-  } catch(e) { showS('scrapeStatus', 'error', '无法打开文件夹: ' + e.message); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1644,7 +1632,9 @@ function vidRenderComposeParams() {
     const ttsImportBtn = document.getElementById('vidImportTtsBtn');
     if (ttsImportBtn) ttsImportBtn.style.display = '';
     const imgZone = document.getElementById('vidUploadImagesZone');
+    const preview = document.getElementById('vidUploadImagesPreview');
     if (imgZone) imgZone.style.display = '';
+    if (preview) preview.style.display = '';
     el.innerHTML = `
       <div class="vid-lbl">转场风格</div>
       <select id="vidTransition" style="width:100%;height:38px;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);">
@@ -2161,8 +2151,30 @@ function importTtsShots() {
   S.storyboard = { shots: [...S._pendingShots] };
   S.vidSegmentDurations = S._pendingShots.map(s => s.srt_duration_sec || s.duration_sec || 0);
   S._pendingShots = null;
-  document.getElementById('vidTtsShotsCount').textContent = '已导入';
+
+  // 切到精品模式，手动同步 UI 状态（不走 vidRenderComposeParams 避免覆盖分镜数据）
+  document.getElementById('vidCompose').value = 'premium';
+  S.vidGenAudio = false;
+  S.vidComposeMode = 'premium';
+
+  const premiumZone = document.getElementById('vidPremiumZone');
+  const uploadSec = document.getElementById('vidUploadSection');
+  uploadSec.style.display = '';
+  premiumZone.style.display = '';
+  // 精品模式隐藏图片上传区
+  const imgZone = document.getElementById('vidUploadImagesZone');
+  const preview = document.getElementById('vidUploadImagesPreview');
+  if (imgZone) imgZone.style.display = 'none';
+  if (preview) preview.style.display = 'none';
+  // 非有声模式：显示音频/字幕上传区
+  const audioCol = document.getElementById('vidAudioZone');
+  const srtCol = document.getElementById('vidSrtZone');
+  if (audioCol) audioCol.parentElement.style.display = '';
+  if (srtCol) srtCol.parentElement.style.display = '';
+
   renderStoryboard();
+  document.getElementById('btnCompose').onclick = doComposePremium;
+  document.getElementById('vidTtsShotsCount').textContent = '已导入';
   showS('vidTTSStatus', 'success', `已导入 ${S.storyboard.shots.length} 个镜头`);
 }
 

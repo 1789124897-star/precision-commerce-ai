@@ -74,6 +74,20 @@ class AsyncTaskRepo:
     """FastAPI 侧异步访问。"""
 
     @staticmethod
+    async def find_duplicate(
+        db: AsyncSession, task_type: str, request_hash: str
+    ) -> Optional[Task]:
+        """查找相同类型+内容的 PENDING/RUNNING 任务（用于幂等去重）。"""
+        result = await db.execute(
+            select(Task).where(
+                Task.type == task_type,
+                Task.request_hash == request_hash,
+                Task.status.in_(["PENDING", "RUNNING"]),
+            ).limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def get_by_id(db: AsyncSession, task_id: str) -> Optional[Task]:
         """按 task_id 查一条任务 """
         result = await db.execute(select(Task).filter_by(task_id=task_id))
@@ -86,6 +100,7 @@ class AsyncTaskRepo:
         task_id: str,
         task_type: str,
         request_json: dict,
+        request_hash: Optional[str] = None,
         parent_task_id: Optional[str] = None,
     ) -> Task:
         """创建一条 PENDING 状态的任务记录。"""
@@ -95,6 +110,7 @@ class AsyncTaskRepo:
             type=task_type,
             status="PENDING",
             request_json=request_json,
+            request_hash=request_hash,
         )
         db.add(task)
         await db.commit()

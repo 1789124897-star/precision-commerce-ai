@@ -1,13 +1,9 @@
 ﻿"""1688 商品图片采集接口"""
-import os
-import sys
-from pathlib import Path
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.schemas.scraper import OpenFolderRequest, ScrapeRequest
+from app.schemas.scraper import ScrapeRequest
 from app.services.task_service import TaskService
 from app.tasks.scraper import scrape_product_task
 
@@ -23,16 +19,3 @@ async def do_scrape(payload: ScrapeRequest, db: AsyncSession = Depends(get_db)):
         celery_task=scrape_product_task,
     )
     return {"data": {"task_id": task.task_id, "task_type": "scrape"}, "message": "ok"}
-
-
-@router.post("/open-folder")
-def open_folder(payload: OpenFolderRequest):
-    path = Path(payload.folder)
-    if not path.is_dir():
-        raise HTTPException(status_code=400, detail=f"文件夹不存在: {payload.folder}")
-    if sys.platform == "win32":
-        os.startfile(str(path))
-    else:
-        import subprocess
-        subprocess.run(["xdg-open", str(path)])
-    return {"data": {"ok": True}, "message": "ok"}

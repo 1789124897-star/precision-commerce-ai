@@ -28,6 +28,7 @@ class Task(Base):
     type: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="PENDING")
     request_json: Mapped[Optional[dict]] = mapped_column(JSON, default=None)
+    request_hash: Mapped[Optional[str]] = mapped_column(String(32), default=None, index=True)
     result_json: Mapped[Optional[dict]] = mapped_column(JSON, default=None)
     error_message: Mapped[Optional[str]] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
