@@ -19,6 +19,7 @@ class ScriptGenerator:
         content: str,
         target_segments: int = 5,
         system_prompt: str = "",
+        task_id: str = "",
     ) -> dict:
 
         if not system_prompt:
@@ -39,7 +40,7 @@ class ScriptGenerator:
         result = self._build_result(segments)
 
         # 保存脚本文件
-        script_path = self._save(task_id="script", result=result)
+        script_path = self._save(task_id=task_id or "script", result=result)
         return {"script": result, "script_path": script_path}
 
     def run_sync(self, **kwargs) -> dict:

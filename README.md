@@ -86,8 +86,8 @@ Docker Compose · Celery Flower · Celery Beat
 
 | 变量 | 说明 |
 |------|------|
-| `DEEPSEEK_API_KEY` | 文本分析 / 脚本生成 |
-| `ARK_API_KEY` | 火山方舟（Seedream + Seedance） |
+| `TEXT_API_KEY` | 文本分析 / 脚本生成（DeepSeek） |
+| `VOLCANO_API_KEY` | 火山方舟（Seedream + Seedance + 豆包多模态） |
 | `DATABASE_URL` | MySQL 连接串 |
 | `REDIS_URL` | Celery broker |
 

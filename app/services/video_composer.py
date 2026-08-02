@@ -23,7 +23,7 @@ from moviepy import (
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from proglog import ProgressBarLogger
 
-from app.core.paths import OUTPUT_DIR, VIDEO_DIR
+from app.core.paths import VIDEO_DIR, from_output_url
 from app.services.seedance_service import SeedanceService
 from app.services.shot_grouper import ShotGrouper
 
@@ -94,7 +94,7 @@ class VideoComposer:
         # 加载音频
         report(0.05, "加载音频...")
         if audio_path:
-            audio_local = self._to_local(audio_path)
+            audio_local = from_output_url(audio_path)
             audio = AudioFileClip(str(audio_local))
             total_duration = audio.duration
             has_audio = True
@@ -144,7 +144,7 @@ class VideoComposer:
 
         # 叠加字幕
         if srt_path:
-            local_srt = self._to_local(srt_path)
+            local_srt = from_output_url(srt_path)
             logger.info(f"字幕路径: raw={srt_path!r} local={local_srt} exists={local_srt.exists()}")
             report(0.8, "叠加字幕...")
             try:
@@ -210,13 +210,6 @@ class VideoComposer:
             return (short, int(short / r))
         return (short, short)
 
-    def _to_local(self, url_or_path: str) -> Path:
-        """/output/... 路径 → 本地绝对路径"""
-        if url_or_path.startswith("/output/"):
-            local = url_or_path[len("/output/"):]
-            return OUTPUT_DIR / local
-        return Path(url_or_path)
-
     def _cleanup_temp_files(self):
         """清理 MoviePy 临时文件"""
         cwd = Path.cwd()
@@ -279,7 +272,7 @@ class VideoComposer:
         """URL → 本地路径，不存在的跳过"""
         result = []
         for url in urls:
-            local = self._to_local(url)
+            local = from_output_url(url)
             if local.exists():
                 result.append(local)
             else:
@@ -500,7 +493,7 @@ class VideoComposer:
         # 加载音频
         report(0.03, "加载音频...")
         if audio_path:
-            audio_local = self._to_local(audio_path)
+            audio_local = from_output_url(audio_path)
             audio = AudioFileClip(str(audio_local))
             total_duration = audio.duration
             has_audio = True
@@ -564,7 +557,7 @@ class VideoComposer:
 
             # 预生成 clip 存在则直接复用
             if pre_generated:
-                pre_path = self._to_local(pre_generated)
+                pre_path = from_output_url(pre_generated)
                 if pre_path.exists():
                     try:
                         clip = VideoFileClip(str(pre_path))
@@ -664,7 +657,7 @@ class VideoComposer:
 
         # 叠加 SRT 字幕
         if srt_path:
-            local_srt = self._to_local(srt_path)
+            local_srt = from_output_url(srt_path)
             logger.info(f"字幕路径: raw={srt_path!r} local={local_srt} exists={local_srt.exists()}")
             if local_srt.exists():
                 report(0.75, "叠加字幕...")

@@ -31,7 +31,7 @@ def generate_script_task(self, task_id: str):
         db.commit()
 
     try:
-        result = ScriptGenerator().run_sync(**request_json)
+        result = ScriptGenerator().run_sync(**request_json, task_id=task_id)
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:

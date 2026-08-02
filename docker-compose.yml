@@ -54,7 +54,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      - DATABASE_URL=mysql+aiomysql://user:pass@db:3306/ecommerce
+      - DATABASE_URL=mysql+pymysql://user:pass@db:3306/ecommerce
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env

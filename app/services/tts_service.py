@@ -9,7 +9,7 @@ import edge_tts
 from aiohttp import ClientError
 from edge_tts.exceptions import EdgeTTSException
 
-from app.core.paths import AUDIO_DIR, OUTPUT_DIR
+from app.core.paths import AUDIO_DIR, to_output_url
 from app.models.task import gen_task_id
 from app.services.ai_client import AIClient
 from app.services.script_generator import ScriptGenerator
@@ -74,8 +74,8 @@ class TTSEngine:
         await _fill_scene_prompts(grouped_shots)
 
         return {
-            "audio_path": _to_output_url(audio_path),
-            "srt_path": _to_output_url(srt_path),
+            "audio_path": to_output_url(audio_path),
+            "srt_path": to_output_url(srt_path),
             "duration_sec": round(duration, 1),
             "grouped_shots": grouped_shots,
         }
@@ -102,11 +102,6 @@ async def _fill_scene_prompts(grouped_shots: list[dict]) -> None:
         for shot in grouped_shots:
             shot["scene_prompt"] = ""
             shot["scene_prompt_en"] = ""
-
-
-def _to_output_url(path: Path) -> str:
-    """路径 → /output/ URL"""
-    return "/output/" + str(path.relative_to(OUTPUT_DIR)).replace("\\", "/")
 
 
 async def _synthesize_with_words(text: str, output_path: Path, voice: str, rate: str, max_retries: int = 3,) -> dict:
@@ -231,57 +226,34 @@ def _parse_srt_entries(srt_path: Path) -> list[dict]:
 
 
 def _group_srt_into_shots(srt_entries: list[dict]) -> list[dict]:
-    """贪心分组：相邻 SRT 条目累加至 ≥ 4s 为一个镜头。"""
-    MIN_SHOT_SEC = 4   # 单镜头最短时长 
-    MAX_SHOT_SEC = 12  # 总时长不得超过 12s
-    groups: list[dict] = []
-    buf_entries: list[dict] = []
-    buf_dur = 0.0
+    """SRT 条目 → 镜头组，委托 ShotGrouper 统一分组逻辑。"""
+    from app.services.shot_grouper import ShotGrouper
 
-    def _seal():
-        nonlocal buf_entries, buf_dur
-        if not buf_entries:
-            return
-        total_dur = round(buf_dur, 3)
-        display_dur = max(total_dur, float(MIN_SHOT_SEC))
-        voiceover = "".join(e["text"] for e in buf_entries)
-        groups.append({
+    # 过滤掉异常时长条目
+    valid = [e for e in srt_entries if e.get("duration_sec", 0) > 0]
+    if not valid:
+        return []
+
+    # 适配 ShotGrouper 输入格式
+    shots = [{"voiceover": e["text"]} for e in valid]
+    durations = [e["duration_sec"] for e in valid]
+
+    shot_groups = ShotGrouper(min_dur=4.0, max_dur=12.0).group(shots, durations)
+
+    # 映射回 TTS 需要的输出格式
+    grouped: list[dict] = []
+    for sg in shot_groups:
+        voiceover = "".join(s.get("voiceover", "") for s in sg["shots"])
+        grouped.append({
             "voiceover": voiceover,
-            "duration_sec": display_dur,
-            "srt_duration_sec": round(total_dur, 1),
-            "merged_count": len(buf_entries),
+            "duration_sec": sg["seedance_dur"],
+            "srt_duration_sec": sg["tts_duration"],
+            "merged_count": len(sg["shots"]),
             "image_url": "",
             "first_frame_url": "",
             "last_frame_url": "",
         })
-        buf_entries = []
-        buf_dur = 0.0
-
-    for entry in srt_entries:
-        dur = entry.get("duration_sec", 0)
-        if dur <= 0:
-            continue
-        if buf_dur + dur > MAX_SHOT_SEC and buf_dur >= MIN_SHOT_SEC:
-            _seal()
-        buf_entries.append(entry)
-        buf_dur += dur
-        if buf_dur >= MIN_SHOT_SEC:
-            _seal()
-
-    if buf_entries:
-        # 尾部不足 4s，能并入上组就并，否则独立成组
-        tail_dur = round(buf_dur, 3)
-        if groups and groups[-1]["srt_duration_sec"] + tail_dur <= MAX_SHOT_SEC:
-            last = groups[-1]
-            last["voiceover"] += "".join(e["text"] for e in buf_entries)
-            new_dur = round(last["srt_duration_sec"] + tail_dur, 1)
-            last["duration_sec"] = new_dur
-            last["srt_duration_sec"] = new_dur
-            last["merged_count"] += len(buf_entries)
-        else:
-            _seal()
-
-    return groups
+    return grouped
 
 
 def _flush_chunk(buf_words: list[tuple[int, int, str]]) -> dict:
