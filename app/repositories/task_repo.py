@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.models import Task
+from app.models.task import STATUS_FAILURE, STATUS_PENDING, STATUS_RUNNING, STATUS_SUCCESS
 
 
 class TaskRepo:
@@ -20,7 +21,7 @@ class TaskRepo:
     @staticmethod
     def find_stale(db: Session, cutoff: datetime) -> list[Task]:
         """找出超过 cutoff 时间仍为 RUNNING 的僵尸任务。"""
-        return list(db.execute(select(Task).where(Task.status == "RUNNING", Task.updated_at < cutoff)).scalars().all())
+        return list(db.execute(select(Task).where(Task.status == STATUS_RUNNING, Task.updated_at < cutoff)).scalars().all())
 
     @staticmethod
     def set_running(db: Session, task_id: str, celery_id: str) -> Optional[Task]:
@@ -28,7 +29,7 @@ class TaskRepo:
         task = TaskRepo.get_by_id(db, task_id)
         if not task:
             return None
-        task.status = "RUNNING"
+        task.status = STATUS_RUNNING
         task.celery_id = celery_id
         return task
 
@@ -38,7 +39,7 @@ class TaskRepo:
         task = TaskRepo.get_by_id(db, task_id)
         if not task:
             return None
-        task.status = "SUCCESS"
+        task.status = STATUS_SUCCESS
         task.result_json = result_json
         return task
 
@@ -48,7 +49,7 @@ class TaskRepo:
         task = TaskRepo.get_by_id(db, task_id)
         if not task:
             return None
-        task.status = "FAILURE"
+        task.status = STATUS_FAILURE
         task.error_message = error_message
         return task
 
@@ -65,7 +66,7 @@ class TaskRepo:
     def mark_stale_failed(db: Session, tasks: list[Task], error_message: str) -> int:
         """批量将僵尸任务标为 FAILURE。"""
         for task in tasks:
-            task.status = "FAILURE"
+            task.status = STATUS_FAILURE
             task.error_message = error_message
         return len(tasks)
 
@@ -74,15 +75,13 @@ class AsyncTaskRepo:
     """FastAPI 侧异步访问。"""
 
     @staticmethod
-    async def find_duplicate(
-        db: AsyncSession, task_type: str, request_hash: str
-    ) -> Optional[Task]:
-        """查找相同类型+内容的 PENDING/RUNNING 任务（用于幂等去重）。"""
+    async def find_duplicate(db: AsyncSession, task_type: str, request_hash: str) -> Optional[Task]:
+        """幂等去重：同一请求在 PENDING/RUNNING 态已存在则复用，不重复下发。"""
         result = await db.execute(
             select(Task).where(
                 Task.type == task_type,
                 Task.request_hash == request_hash,
-                Task.status.in_(["PENDING", "RUNNING"]),
+                Task.status.in_([STATUS_PENDING, STATUS_RUNNING]),
             ).limit(1)
         )
         return result.scalar_one_or_none()
@@ -100,15 +99,15 @@ class AsyncTaskRepo:
         task_id: str,
         task_type: str,
         request_json: dict,
-        request_hash: Optional[str] = None,
-        parent_task_id: Optional[str] = None,
+        request_hash: str,
+        parent_task_id: Optional[str],
     ) -> Task:
         """创建一条 PENDING 状态的任务记录。"""
         task = Task(
             task_id=task_id,
             parent_task_id=parent_task_id,
             type=task_type,
-            status="PENDING",
+            status=STATUS_PENDING,
             request_json=request_json,
             request_hash=request_hash,
         )

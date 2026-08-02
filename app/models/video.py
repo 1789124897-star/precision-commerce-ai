@@ -21,5 +21,4 @@ class Video(Base):
     duration_sec: Mapped[float] = mapped_column(Float, default=0.0)
     resolution: Mapped[str] = mapped_column(String(10), default="")
     aspect_ratio: Mapped[str] = mapped_column(String(10), default="")
-    status: Mapped[str] = mapped_column(String(20), default="generated")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

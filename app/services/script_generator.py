@@ -5,7 +5,7 @@ import logging
 
 from app.core.paths import SCRIPTS_DIR
 from app.services.ai_client import AIClient
-from app.services.prompt_templates import build_product_script_prompt
+from app.services.prompts import build_product_script_prompt
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession, get_db
-from app.models.task import Task
+from app.models.task import STATUS_FAILURE, STATUS_SUCCESS, TASK_STATUSES, TASK_TYPES, Task
 from app.repositories.task_repo import AsyncTaskRepo, TaskRepo
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -24,6 +24,11 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """任务历史：分页 + 筛选 + 总数"""
+    if task_type and task_type not in TASK_TYPES:
+        return {"data": None, "message": f"无效的任务类型: {task_type}，合法值: {TASK_TYPES}"}
+    if status and status not in TASK_STATUSES:
+        return {"data": None, "message": f"无效的状态: {status}，合法值: {TASK_STATUSES}"}
+
     base = select(Task)
     count_base = select(func.count(Task.id))
     if task_type:
@@ -67,6 +72,11 @@ async def export_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     """导出任务历史为 CSV"""
+    if task_type and task_type not in TASK_TYPES:
+        return {"data": None, "message": f"无效的任务类型: {task_type}，合法值: {TASK_TYPES}"}
+    if status and status not in TASK_STATUSES:
+        return {"data": None, "message": f"无效的状态: {status}，合法值: {TASK_STATUSES}"}
+
     base = select(Task).order_by(desc(Task.id))
     if task_type:
         base = base.where(Task.type == task_type)
@@ -106,7 +116,7 @@ async def cancel_task(task_id: str) -> dict:
         task = TaskRepo.get_by_id(db, task_id)
         if not task:
             return {"data": None, "message": "任务不存在"}
-        if task.status in ("SUCCESS", "FAILURE"):
+        if task.status in (STATUS_SUCCESS, STATUS_FAILURE):
             return {"data": None, "message": f"任务已结束 ({task.status})"}
 
         # 撤回 Celery 任务（如果正在执行）
@@ -116,7 +126,7 @@ async def cancel_task(task_id: str) -> dict:
         TaskRepo.set_failure(db, task_id, "用户手动取消")
         db.commit()
 
-    return {"data": {"task_id": task_id, "status": "FAILURE"}, "message": "已取消"}
+    return {"data": {"task_id": task_id, "status": STATUS_FAILURE}, "message": "已取消"}
 
 
 @router.get("/{task_id}")

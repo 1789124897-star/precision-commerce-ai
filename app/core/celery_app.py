@@ -1,7 +1,6 @@
-"""Celery 实例 — 队列隔离 + 定时任务 + 重试策略"""
+"""Celery 实例 — 定时任务 + 重试策略"""
 from celery import Celery
 from celery.schedules import crontab
-from kombu import Queue
 
 from app.core.config import settings
 from app.core.logging import setup_logging
@@ -43,28 +42,6 @@ celery_app.conf.update(
 
     # 日志：不劫持 root logger，用我们自己的配置
     worker_hijack_root_logger=False,
-
-    # 多队列隔离：按任务类型分队列，防止 CPU 密集任务饿死 IO 密集任务
-    task_queues=(
-        Queue("video",   routing_key="video.#",   queue_arguments={"x-max-priority": 10}),
-        Queue("ai",      routing_key="ai.#",      queue_arguments={"x-max-priority": 10}),
-        Queue("compose", routing_key="compose.#", queue_arguments={"x-max-priority": 10}),
-        Queue("scraper", routing_key="scraper.#", queue_arguments={"x-max-priority": 10}),
-        Queue("default", routing_key="default.#", queue_arguments={"x-max-priority": 10}),
-    ),
-    task_routes={
-        "generate_script":      {"queue": "video"},
-        "generate_tts":         {"queue": "video"},
-        "compose_video":        {"queue": "compose"},
-        "compose_premium_video": {"queue": "compose"},
-        "generate_shot":        {"queue": "compose"},
-        "analyze_product":      {"queue": "ai"},
-        "generate_strategies":  {"queue": "ai"},
-        "generate_images":      {"queue": "ai"},
-        "scrape_product":       {"queue": "scraper"},
-        "cleanup_stale_tasks":  {"queue": "default"},
-    },
-    task_default_priority=5,
 
     # 定时任务
     beat_schedule={

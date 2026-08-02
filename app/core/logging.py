@@ -55,7 +55,3 @@ def setup_logging() -> None:
 
     # 静默 SQLAlchemy 引擎 SQL
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
-
-
-def get_logger(name: str) -> logging.Logger:
-    return logging.getLogger(name)

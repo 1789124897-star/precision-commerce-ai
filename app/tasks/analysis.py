@@ -4,6 +4,7 @@ import logging
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
 from app.models import Analysis
+from app.models.task import STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
 from app.services.analysis import AnalysisService
 
@@ -28,7 +29,7 @@ def analyze_product_task(self, task_id: str):
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
             raise ValueError(f"任务不存在: {task_id}")
-        request_json = dict(task.request_json or {})
+        request_json = task.request_json or {}
         db.commit()
 
     try:
@@ -58,4 +59,4 @@ def analyze_product_task(self, task_id: str):
         db.commit()
 
     logger.info("完成 task_id=%s", task_id)
-    return {"task_id": task_id, "status": "SUCCESS"}
+    return {"task_id": task_id, "status": STATUS_SUCCESS}

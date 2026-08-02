@@ -18,6 +18,7 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     alembic_cfg = Config("alembic.ini")
+    alembic_cfg.file_config.read("alembic.ini", encoding="utf-8")
     command.upgrade(alembic_cfg, "head")
     yield
 

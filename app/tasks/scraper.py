@@ -30,7 +30,7 @@ def scrape_product_task(self, task_id: str):
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
             raise ValueError(f"任务不存在: {task_id}")
-        url = dict(task.request_json or {})["url"]
+        url = (task.request_json or {}).get("url", "")
         db.commit()
 
     try:
@@ -50,7 +50,6 @@ def scrape_product_task(self, task_id: str):
                     task_id=task_id,
                     url=url,
                     name=result.get("name", ""),
-                    folder=result.get("folder", ""),
                     image_count=result.get("image_count", 0),
                 )
             )

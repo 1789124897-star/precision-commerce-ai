@@ -12,10 +12,16 @@ from app.core.database import Base
 TASK_TYPES = ["scrape", "analysis", "strategy", "image_gen", "script_gen", "tts", "video_compose", "shot_gen"]
 TASK_STATUSES = ["PENDING", "RUNNING", "SUCCESS", "FAILURE"]
 
+# 状态常量 — 供 repo/route 引用，避免硬编码字符串
+STATUS_PENDING = "PENDING"
+STATUS_RUNNING = "RUNNING"
+STATUS_SUCCESS = "SUCCESS"
+STATUS_FAILURE = "FAILURE"
+
 
 def gen_task_id() -> str:
     
-    return uuid.uuid4().hex
+    return uuid.uuid4().hex 
 
 
 class Task(Base):
@@ -26,7 +32,7 @@ class Task(Base):
     parent_task_id: Mapped[Optional[str]] = mapped_column(String(32), default=None, index=True)
     celery_id: Mapped[Optional[str]] = mapped_column(String(64), default=None)
     type: Mapped[str] = mapped_column(String(20), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="PENDING")
+    status: Mapped[str] = mapped_column(String(20), default=STATUS_PENDING)
     request_json: Mapped[Optional[dict]] = mapped_column(JSON, default=None)
     request_hash: Mapped[Optional[str]] = mapped_column(String(32), default=None, index=True)
     result_json: Mapped[Optional[dict]] = mapped_column(JSON, default=None)

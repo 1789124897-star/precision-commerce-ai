@@ -75,7 +75,7 @@ class AIClient:
 
     async def generate_shot_scenes(self, *, voiceovers: list[str]) -> list[dict]:
         """每组口播文案 → 双语镜头场景描述。"""
-        from app.services.prompt_templates import build_shot_scene_prompt
+        from app.services.prompts import build_shot_scene_prompt
 
         prompt = build_shot_scene_prompt(voiceovers)
         result = await self._text_client.generate_json(

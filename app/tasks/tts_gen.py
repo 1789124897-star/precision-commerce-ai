@@ -22,12 +22,14 @@ logger = logging.getLogger(__name__)
     retry_jitter=True,
 )
 def generate_tts_task(self, task_id: str):
+
     logger.info("开始 task_id=%s", task_id)
+    
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
             raise ValueError(f"任务不存在: {task_id}")
-        request_json = dict(task.request_json or {})
+        request_json = task.request_json or {}
         db.commit()
 
     try:

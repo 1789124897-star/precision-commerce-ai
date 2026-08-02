@@ -1,4 +1,4 @@
-﻿# AI 任务工作台 — 多队列异步任务管线实践
+﻿# AI 任务工作台 — 全链路异步任务管线
 
 > 基于 FastAPI + Celery 的全链路异步任务平台，覆盖数据采集、AI 分析、内容生成、多媒体合成等场景。
 
@@ -43,16 +43,6 @@ Model 层 ── SQLAlchemy 2.0 Mapped，Base.metadata.create_all 自动建表
 
 所有耗时操作通过 Celery 异步执行，Redis 作为消息代理，任务状态通过 `GET /tasks/{task_id}` 统一查询。
 
-**五队列优先级隔离：**
-
-| 队列 | 优先级 | 任务 | 设计意图 |
-|------|--------|------|---------|
-| `video` | 9 | 脚本生成、TTS | 流水线关键路径，优先保障 |
-| `ai` | 7 | 分析、策略、生图 | IO 密集（API 调用），高并发安全 |
-| `scraper` | 5 | 数据采集 | 浏览器自动化，内存大户 |
-| `compose` | 3 | 视频合成 | CPU 密集（MoviePy），压低防饥饿 |
-| `default` | 1 | 僵尸任务清理 | 后台维护，最低优先级 |
-
 **可靠性保障：**
 
 - `task_acks_late=True` — Worker 崩溃任务自动重分派
@@ -93,7 +83,7 @@ Docker Compose · Celery Flower · Celery Beat
 
 ```bash
 cp .env.example .env          # 填入 API Key
-docker-compose up -d          # 一键启动（API + Celery Workers × 4 + MySQL + Redis）
+docker-compose up -d          # 一键启动（API + Celery Worker + Beat + Flower + MySQL + Redis）
 ```
 
 服务端口：
@@ -107,12 +97,12 @@ docker-compose up -d          # 一键启动（API + Celery Workers × 4 + MySQL
 app/
 ├── api/routes/        路由层（参数校验 + 任务下发）
 ├── services/          业务逻辑（分析/生图/脚本/TTS/视频）
-├── tasks/             Celery 任务定义（五队列路由）
+├── tasks/             Celery 任务定义
 ├── models/            ORM 模型（Task/Product/Analysis/Strategy/Video）
 ├── schemas/           Pydantic 请求/响应模型
 ├── core/              基础设施（配置/数据库/Celery/路径/日志）
 ├── repositories/      数据访问封装
-└── tasks/             Celery 任务定义（五队列路由）
+└── llm/               LLM 客户端（DeepSeek + 豆包）
 static/                前端页面（index.html）
 logs/                  四层分离日志（app/error/task）
 output/                产物目录（图片/音频/视频）

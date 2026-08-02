@@ -1,4 +1,4 @@
-"""1688 商品图抓取，DrissionPage浏览器自动化。"""
+"""1688 商品图抓取，DrissionPage 浏览器自动化。"""
 import json
 import logging
 import re
@@ -17,7 +17,6 @@ from app.services.anti_crawl import (
     ensure_fresh_cookies,
     load_cookies,
     random_delay,
-    retry,
     save_cookies,
 )
 from app.services.proxy_manager import ProxyManager
@@ -27,11 +26,15 @@ logger = logging.getLogger(__name__)
 with open(SCRAPER_CONFIG, encoding="utf-8") as f:
     SCRAPER_CFG = yaml.safe_load(f)
 
+_IMG_PREFIX = {"main": "主图", "sku": "SKU", "detail": "详情图"}
+
 
 class ImageScraper:
 
     def __init__(self):
+
         self.images: list[dict] = []
+        self._proxy: str = ""
         self.proxy_manager = ProxyManager(
             settings.PROXY_PROVIDER,
             settings.PROXY_HOST,
@@ -39,7 +42,8 @@ class ImageScraper:
             settings.PROXY_USERNAME,
             settings.PROXY_PASSWORD,
         )
-        self._proxy = ""
+
+    # ── 主入口 ────────────────────────────────────────────
 
     def scrape(self, product_url: str, task_id: str) -> dict:
         task_dir = IMAGE_DIR / task_id
@@ -47,85 +51,12 @@ class ImageScraper:
         logger.info("开始采集 %s -> %s", task_id, task_dir)
 
         self.images = []
-
-        def _run_scrape():
-            """可重试的爬取部分，包在 retry 里。"""
-            self.images = []
-
-            options = ChromiumOptions()
-            options.set_browser_path(settings.EDGE_PATH)
-
-            self._proxy = self.proxy_manager.get_next()
-            if self._proxy:
-                options.set_proxy(self._proxy)
-
-            page = ChromiumPage(options)
-
-            try:
-                # ── 0. 刷新 + 注入 cookie ──
-                ensure_fresh_cookies(
-                    page,
-                    settings.ALIBABA_1688_EMAIL,
-                    settings.ALIBABA_1688_PASSWORD,
-                )
-                load_cookies(page)
-
-                # ── 1. 访问页面 ──
-                page.get(product_url)
-                random_delay()
-                logger.info("页面标题: %s", page.title)
-
-                product_name = page.title or ""
-                for suffix in ["-阿里巴巴", "- 阿里巴巴", "-1688", "- 1688", "| 1688"]:
-                    if suffix in product_name:
-                        product_name = product_name.split(suffix)[0].strip()
-                        break
-
-                if "404" in (page.title or "") or "错误" in (page.title or ""):
-                    raise RuntimeError("页面无法访问（" + str(page.title) + "），请检查链接是否正确")
-
-                # ── 2. 检测页面版本 ──
-                if page.ele(SCRAPER_CFG["selectors"]["v3"]["main_image"]):
-                    version = "v3"
-                elif page.ele(SCRAPER_CFG["selectors"]["v2"]["main_image"]):
-                    version = "v2"
-                else:
-                    version = "v1"
-                logger.info("检测到" + version.upper() + "页面")
-
-                # ── 3. 抓图 ──
-                self._download_main_images(page, task_dir, version)
-                random_delay(1.0, 2.0)
-                self._scroll_to_bottom(page)
-                random_delay(1.0, 2.0)
-                self._download_sku_images(page, task_dir, version)
-                random_delay(1.0, 2.0)
-                self._download_detail_images(page, task_dir, version)
-
-                return product_name
-
-            except Exception:
-                logger.exception("采集过程中发生未预期错误")
-                if not self.images:
-                    shutil.rmtree(task_dir, ignore_errors=True)
-                raise
-            finally:
-                save_cookies(page)
-                page.quit()
-
-        product_name = retry(_run_scrape)
+        product_name = self._collect(task_dir, product_url)
 
         if not self.images:
             raise RuntimeError("未采集到任何图片，页面结构可能已变更或触发反爬")
 
-        metadata = {
-            "task_id": task_id,
-            "product_name": product_name,
-            "product_url": product_url,
-            "main_images": [i for i in self.images if i["category"] == "main"],
-            "sku_images": [i for i in self.images if i["category"] == "sku"],
-            "detail_images": [i for i in self.images if i["category"] == "detail"],
-        }
+        metadata = self._build_metadata(task_id, product_name, product_url)
         meta_path = task_dir / "metadata.json"
         meta_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info("元数据已保存: %s", meta_path)
@@ -138,39 +69,97 @@ class ImageScraper:
             "images": metadata,
         }
 
-    def _download_main_images(self, page, task_dir: Path, version: str) -> None:
+    # ── 浏览器采集流程 ────────────────────────────────────
+
+    def _collect(self, task_dir: Path, product_url: str) -> str:
+        """打开浏览器，执行完整采集流程，返回商品名。"""
+        options = ChromiumOptions()
+        options.set_browser_path(settings.EDGE_PATH)
+
+        self._proxy = self.proxy_manager.get_next()
+        if self._proxy:
+            options.set_proxy(self._proxy)
+
+        page = ChromiumPage(options)
+        try:
+            ensure_fresh_cookies(page, settings.ALIBABA_1688_EMAIL, settings.ALIBABA_1688_PASSWORD)
+            load_cookies(page)
+
+            page.get(product_url)
+            random_delay()
+            product_name = self._parse_title(page.title or "")
+
+            version = self._detect_version(page)
+            logger.info("页面: %s | 版本: %s", product_name, version.upper())
+
+            self._download_images(page, task_dir, version, "main_image", "main")
+            random_delay(1.0, 2.0)
+            self._scroll_to_bottom(page)
+            random_delay(1.0, 2.0)
+            self._download_sku_images(page, task_dir, version)
+            random_delay(1.0, 2.0)
+            self._download_images(page, task_dir, version, "detail_image", "detail")
+
+            return product_name
+        except Exception:
+            logger.exception("采集失败")
+            if not self.images:
+                shutil.rmtree(task_dir, ignore_errors=True)
+            raise
+        finally:
+            save_cookies(page)
+            page.quit()
+
+    @staticmethod
+    def _parse_title(title: str) -> str:
+        """从 1688 页面标题中提取商品名。"""
+        for sep in ("-阿里巴巴", "- 阿里巴巴", "-1688", "- 1688", "| 1688"):
+            if sep in title:
+                return title.split(sep)[0].strip()
+        return title
+
+    @staticmethod
+    def _detect_version(page) -> str:
+        """根据页面元素命中情况判断 1688 页面版本。"""
+        for v in ("v3", "v2"):
+            if page.ele(SCRAPER_CFG["selectors"][v]["main_image"]):
+                return v
+        return "v1"
+
+    # ── 图片下载 ──────────────────────────────────────────
+
+    def _download_images(self, page, task_dir: Path, version: str, selector_key: str, category: str) -> None:
+        """下载主图/详情图（按选择器取元素 → 提取 URL → 去重 → 下载）。"""
         cfg = SCRAPER_CFG["selectors"][version]
-
-        imgs = page.eles(cfg["main_image"])
+        elements = page.eles(cfg[selector_key])
         attrs = ("src", "data-lazyload-src") if version == "v1" else ("src",)
+        prefix = _IMG_PREFIX[category]
 
-        logger.info("发现 %d 张主图", len(imgs))
-        seen = set()
-        idx = 0
-        for img in imgs:
+        logger.info("发现 %d 张%s", len(elements), prefix)
+        seen: set[str] = set()
+        for idx, el in enumerate(elements, 1):
             try:
-                url = None
-                for attr in attrs:
-                    url = img.attr(attr)
-                    if url:
-                        break
+                url = next((el.attr(a) for a in attrs if el.attr(a)), None)
                 if not url or url in seen:
                     continue
                 seen.add(url)
-                idx += 1
-                filename = f"主图_{idx}.jpg"
+                filename = f"{prefix}_{idx}.jpg"
                 if self._download(url, task_dir, filename):
-                    self.images.append({"filename": filename, "url": url, "category": "main"})
+                    self.images.append(
+                        {"filename": filename, "url": url, "category": category}
+                    )
             except Exception:
-                logger.warning("主图_%d 处理异常", idx, exc_info=True)
+                logger.warning("%s_%d 处理异常", prefix, idx, exc_info=True)
 
     def _download_sku_images(self, page, task_dir: Path, version: str) -> None:
+        """下载 SKU 变体图（URL 可能来自背景图，需提取标签，去除 _sum 后缀）。"""
         cfg = SCRAPER_CFG["selectors"][version]
         nodes = page.eles(cfg["sku_image"])
-        logger.info("发现 %d 张 SKU 图", len(nodes))
-        seen = set()
-        idx = 0
-        for node in nodes:
+        prefix = _IMG_PREFIX["sku"]
+
+        logger.info("发现 %d 张%s", len(nodes), prefix)
+        seen: set[str] = set()
+        for idx, node in enumerate(nodes, 1):
             try:
                 url = node.attr("src") or self._extract_bg_url(node.attr("style"))
                 if not url or url in seen:
@@ -178,79 +167,62 @@ class ImageScraper:
                 seen.add(url)
                 url = url.replace("_sum.jpg", "").replace("_sum.webp", "")
 
-                label = ""
-                try:
-                    ancestor = node
-                    for _ in range(cfg["sku_label_level"]):
-                        p = ancestor.parent
-                        ancestor = p() if callable(p) else p
-                    label_el = ancestor.ele(cfg["sku_label"])
-                    if label_el:
-                        label = label_el.text.strip()
-                    logger.info("SKU标签提取: level=%s selector=%s label='%s'", cfg["sku_label_level"], cfg["sku_label"], label)
-                except Exception:
-                    logger.warning("SKU标签提取异常", exc_info=True)
-
-                idx += 1
-                safe_label = re.sub(r'[\\/:*?"<>|]', "_", label) if label else str(idx)
-                filename = f"SKU_{idx}_{safe_label}.jpg"
+                label = self._extract_sku_label(node, cfg)
+                safe_label = (
+                    re.sub(r'[\\/:*?"<>|]', "_", label) if label else str(idx)
+                )
+                filename = f"{prefix}_{idx}_{safe_label}.jpg"
                 if self._download(url, task_dir, filename):
                     entry = {"filename": filename, "url": url, "category": "sku"}
                     if label:
                         entry["label"] = label
                     self.images.append(entry)
             except Exception:
-                logger.warning("SKU_%d 处理异常", idx, exc_info=True)
+                logger.warning("%s_%d 处理异常", prefix, idx, exc_info=True)
 
-    def _download_detail_images(self, page, task_dir: Path, version: str) -> None:
-        cfg = SCRAPER_CFG["selectors"][version]
-
-        imgs = page.eles(cfg["detail_image"])
-        attrs = ("src", "data-lazyload-src") if version == "v1" else ("src",)
-
-        logger.info("发现 %d 张详情图", len(imgs))
-        seen = set()
-        idx = 0
-        for img in imgs:
-            try:
-                url = None
-                for attr in attrs:
-                    url = img.attr(attr)
-                    if url:
-                        break
-                if not url or url in seen:
-                    continue
-                seen.add(url)
-                idx += 1
-                filename = f"详情图_{idx}.jpg"
-                if self._download(url, task_dir, filename):
-                    self.images.append({"filename": filename, "url": url, "category": "detail"})
-            except Exception:
-                logger.warning("详情图_%d 处理异常", idx, exc_info=True)
+    def _extract_sku_label(self, node, cfg: dict) -> str:
+        """向上遍历 DOM，提取 SKU 规格标签。"""
+        try:
+            ancestor = node
+            for _ in range(cfg["sku_label_level"]):
+                p = ancestor.parent
+                ancestor = p() if callable(p) else p
+            el = ancestor.ele(cfg["sku_label"])
+            return el.text.strip() if el else ""
+        except Exception:
+            logger.warning("SKU 标签提取异常", exc_info=True)
+            return ""
 
     @staticmethod
     def _scroll_to_bottom(page) -> None:
+        """滚动到底部触发懒加载。"""
         try:
             start = time.time()
-            last_height = page.run_js("return document.body.scrollHeight;")
+            last = page.run_js("return document.body.scrollHeight;")
             while time.time() - start < SCRAPER_CFG["download"]["scroll_timeout"]:
                 page.scroll.to_bottom()
                 random_delay(0.5, 1.0)
-                current = page.run_js("return document.body.scrollHeight;")
-                if current == last_height:
+                cur = page.run_js("return document.body.scrollHeight;")
+                if cur == last:
                     break
-                last_height = current
+                last = cur
             logger.info("已滚动到页面底部")
         except Exception:
             logger.warning("滚动异常，跳过", exc_info=True)
 
+    # ── 底层：单张下载 & 工具 ──────────────────────────────
+
     def _download(self, url: str, save_dir: Path, filename: str) -> bool:
+        """下载单张图片，过滤过小/非图片响应。"""
         filename = re.sub(r'[\\/:*?"<>|]', "_", filename)
         try:
             proxy = self._proxy
             proxies = {"http": proxy, "https": proxy} if proxy else {"http": "", "https": ""}
             resp = requests.get(
-                url, stream=True, timeout=SCRAPER_CFG["download"]["timeout"], headers=SCRAPER_CFG["request"]["headers"],
+                url,
+                stream=True,
+                timeout=SCRAPER_CFG["download"]["timeout"],
+                headers=SCRAPER_CFG["request"]["headers"],
                 proxies=proxies,
             )
             resp.raise_for_status()
@@ -272,7 +244,18 @@ class ImageScraper:
 
     @staticmethod
     def _extract_bg_url(style: Optional[str]) -> Optional[str]:
+        """从 CSS background-image 中提取 URL。"""
         if not style:
             return None
-        match = re.search(r'url\(["\']?(.*?)["\']?\)', style)
-        return match.group(1) if match else None
+        m = re.search(r'url\(["\']?(.*?)["\']?\)', style)
+        return m.group(1) if m else None
+
+    def _build_metadata(self, task_id: str, product_name: str, product_url: str) -> dict:
+        return {
+            "task_id": task_id,
+            "product_name": product_name,
+            "product_url": product_url,
+            "main_images": [i for i in self.images if i["category"] == "main"],
+            "sku_images": [i for i in self.images if i["category"] == "sku"],
+            "detail_images": [i for i in self.images if i["category"] == "detail"],
+        }
