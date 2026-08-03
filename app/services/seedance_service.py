@@ -9,6 +9,7 @@ from typing import Any, Optional
 import httpx
 
 from app.core.config import settings
+from app.core.exceptions import AppException
 from app.core.paths import VIDEO_DIR as SEEDANCE_VIDEO_DIR
 
 logger = logging.getLogger(__name__)
@@ -94,12 +95,12 @@ class SeedanceService:
             if resp.status_code != 200:
                 body = resp.text[:300]
                 logger.error(f"Seedance 提交失败 HTTP {resp.status_code}: {body}")
-                raise RuntimeError(f"Seedance API error {resp.status_code}: {body}")
+                raise AppException(f"Seedance API error {resp.status_code}: {body}", 502)
 
             task_id: str = data.get("id") or data.get("taskId") or data.get("task_id")
             if not task_id:
                 logger.error(f"Seedance 响应无 task_id: {resp.text[:300]}")
-                raise RuntimeError(f"Seedance 响应缺少 task_id: {resp.text[:200]}")
+                raise AppException(f"Seedance 响应缺少 task_id: {resp.text[:200]}", 502)
             logger.info(f"Seedance 任务已提交: {task_id}")
             return task_id
 
@@ -128,11 +129,11 @@ class SeedanceService:
                         logger.info(f"Seedance 任务完成: {task_id} → {video_url}")
                         return video_url
                     logger.warning(f"Seedance 已完成但无 video_url: {json.dumps(data, ensure_ascii=False)[:300]}")
-                    raise RuntimeError("Seedance 任务完成但未返回视频 URL")
+                    raise AppException("Seedance 任务完成但未返回视频 URL", 502)
 
                 elif status == "failed":
                     err_msg = data.get("error", {}).get("message", "任务失败")
-                    raise RuntimeError(f"Seedance 任务失败: {err_msg}")
+                    raise AppException(f"Seedance 任务失败: {err_msg}", 502)
 
         raise TimeoutError(f"Seedance 任务超时: {task_id} (轮询 {poll_max} 次)")
 
@@ -142,7 +143,7 @@ class SeedanceService:
         async with httpx.AsyncClient(timeout=120, trust_env=False) as client:
             resp = await client.get(video_url, follow_redirects=True)
             if resp.status_code != 200:
-                raise RuntimeError(f"视频下载失败 HTTP {resp.status_code}")
+                raise AppException(f"视频下载失败 HTTP {resp.status_code}", 502)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(resp.content)
         logger.info(f"视频已保存: {output_path} ({output_path.stat().st_size} bytes)")

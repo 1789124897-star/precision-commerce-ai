@@ -24,6 +24,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from proglog import ProgressBarLogger
 
 from app.core.paths import VIDEO_DIR, from_output_url
+from app.core.exceptions import AppException
 from app.core.srt_utils import srt_to_seconds
 from app.services.seedance_service import SeedanceService
 from app.services.shot_grouper import ShotGrouper
@@ -92,7 +93,7 @@ class VideoComposer:
         # 下载/加载图片
         images = self._load_local_images(images)
         if not images:
-            raise ValueError("没有可用的图片素材")
+            raise AppException("没有可用的图片素材", 400)
 
         # 加载音频
         report(0.05, "加载音频...")

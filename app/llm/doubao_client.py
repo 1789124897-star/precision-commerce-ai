@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 from app.core.config import settings
+from app.core.exceptions import AppException
 from app.llm.base import BaseLLMClient
 from app.llm.http import post_with_retry
 
@@ -21,11 +22,11 @@ class DoubaoClient(BaseLLMClient):
         self._base_url = settings.DOUBAO_BASE_URL
         self._model = settings.DOUBAO_MODEL
         if not self._api_key:
-            raise ValueError("未配置 VOLCANO_API_KEY，请在 .env 中设置")
+            raise AppException("未配置 VOLCANO_API_KEY，请在 .env 中设置")
         if not self._base_url:
-            raise ValueError("未配置 DOUBAO_BASE_URL，请在 .env 中设置")
+            raise AppException("未配置 DOUBAO_BASE_URL，请在 .env 中设置")
         if not self._model:
-            raise ValueError("未配置 DOUBAO_MODEL，请在 .env 中设置")
+            raise AppException("未配置 DOUBAO_MODEL，请在 .env 中设置")
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -81,5 +82,5 @@ class DoubaoClient(BaseLLMClient):
         logger.info("豆包多模态请求完成 耗时=%.1fs", elapsed)
         result_text: str = data["choices"][0]["message"]["content"]
         if not result_text:
-            raise ValueError("模型返回空内容")
+            raise AppException("模型返回空内容", 502)
         return result_text

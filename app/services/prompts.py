@@ -11,8 +11,7 @@ def build_analysis_prompt(name: str, function: str, price: str, extra: str, cust
     if custom_prompt.strip():
         return custom_prompt.replace("{name}", name).replace("{function}", function).replace("{price}", price).replace("{extra}", extra or "无")
 
-    return f"""
-请结合商品图片和商品文本信息完成一份结构化分析报告。
+    return f"""请结合商品图片和商品文本信息完成一份结构化分析报告。
 
 商品信息：
 - 商品标题：{name}
@@ -36,8 +35,7 @@ def build_analysis_prompt(name: str, function: str, price: str, extra: str, cust
 
 def build_strategy_prompt(analysis: str, strategy_code: str, strategy_name: str, system_prompt: str = "") -> str:
     role = system_prompt.strip() or "你是一名资深电商策略师，专门为精铺卖家设计差异化营销方案。"
-    return f"""
-{role}
+    return f"""{role}
 方案类型：{strategy_name}（{STRATEGY_TYPES[strategy_code]["description"]}）
 
 以下是商品分析报告：
@@ -185,13 +183,13 @@ def build_product_script_prompt(content: str = "", target_segments: int = 8) -> 
 
     target_segments = max(target_segments, 5)
     feature_count = max(target_segments - 4, 0)
-    type_hint = (
-        f"hook(1) → intro(1) → feature({feature_count}) → scene(1) → cta(1)"
-        if feature_count > 0
-        else "hook(1) → intro(1) → scene(1) → cta(1)"
-        if target_segments >= 4
-        else "hook(1) → scene(1) → cta(1)"
-    )
+
+    if feature_count > 0:
+        type_hint = f"hook(1) → intro(1) → feature({feature_count}) → scene(1) → cta(1)"
+    elif target_segments >= 4:
+        type_hint = "hook(1) → intro(1) → scene(1) → cta(1)"
+    else:
+        type_hint = "hook(1) → scene(1) → cta(1)"
 
     return f"""你是一名资深广告导演。根据产品信息撰写{target_segments}段口播脚本。
 

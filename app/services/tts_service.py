@@ -11,6 +11,7 @@ from aiohttp import ClientError
 from edge_tts.exceptions import EdgeTTSException
 
 from app.core.paths import AUDIO_DIR, to_output_url
+from app.core.exceptions import AppException
 from app.core.srt_utils import seconds_to_srt, srt_to_seconds
 from app.services.ai_client import AIClient
 from app.services.script_generator import ScriptGenerator
@@ -134,7 +135,7 @@ async def _synthesize_with_words(text: str, output_path: Path, voice: str, rate:
                     words.append((char_start, max(char_dur, 1), ch))
 
             if not words:
-                raise RuntimeError("未获取到逐字时间戳")
+                raise AppException("未获取到逐字时间戳")
             offset_ticks = words[-1][0] + words[-1][1]
 
             logger.info(
@@ -147,7 +148,7 @@ async def _synthesize_with_words(text: str, output_path: Path, voice: str, rate:
             wait = 2 ** attempt
             logger.warning(f"TTS 尝试 {attempt + 1}/{max_retries} 失败: {e}，{wait}s 后重试")
             await asyncio.sleep(wait)
-    raise RuntimeError(f"TTS 重试 {max_retries} 次均失败: {last_err}")
+    raise AppException(f"TTS 重试 {max_retries} 次均失败: {last_err}")
 
 
 def _generate_srt_from_words(words: list[tuple[int, int, str]], output_path: Path,) -> None:
@@ -197,7 +198,7 @@ def _generate_srt_from_words(words: list[tuple[int, int, str]], output_path: Pat
 def _parse_srt_entries(srt_path: Path) -> list[dict]:
     """解析 SRT 文件，返回每条字幕的 {text, start_sec, end_sec, duration_sec}。"""
     if not srt_path.exists():
-        raise FileNotFoundError(f"SRT 文件不存在: {srt_path}")
+        raise AppException(f"SRT 文件不存在: {srt_path}", 404)
 
     raw = srt_path.read_text(encoding="utf-8").strip()
     entries: list[dict] = []
@@ -219,7 +220,7 @@ def _parse_srt_entries(srt_path: Path) -> list[dict]:
         })
 
     if not entries:
-        raise RuntimeError(f"SRT 解析结果为空: {srt_path}")
+        raise AppException(f"SRT 解析结果为空: {srt_path}")
     return entries
 
 

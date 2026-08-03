@@ -11,6 +11,7 @@ import yaml
 from DrissionPage import ChromiumOptions, ChromiumPage
 
 from app.core.config import settings
+from app.core.exceptions import AppException
 from app.core.paths import IMAGE_DIR, SCRAPER_CONFIG
 from app.core.utils import sanitize_filename, save_json
 from app.services.anti_crawl import (
@@ -54,7 +55,7 @@ class ImageScraper:
         product_name = self._collect(task_dir, product_url)
 
         if not self.images:
-            raise RuntimeError("未采集到任何图片，页面结构可能已变更或触发反爬")
+            raise AppException("未采集到任何图片，页面结构可能已变更或触发反爬")
 
         metadata = self._build_metadata(task_id, product_name, product_url)
         meta_path = task_dir / "metadata.json"

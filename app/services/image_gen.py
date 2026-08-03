@@ -10,6 +10,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.paths import IMAGE_DIR
+from app.core.exceptions import AppException
 from app.core.utils import image_to_data_url
 from app.services.ai_client import AIClient
 
@@ -31,7 +32,7 @@ class ImageGenService:
     ) -> dict:
         size = size or "2048x2048"
         if not settings.SEEDREAM_IMAGE_URL or not settings.SEEDREAM_IMAGE_MODEL:
-            raise ValueError("未配置图片生成 API，请在 .env 中设置 SEEDREAM_IMAGE_URL 和 SEEDREAM_IMAGE_MODEL")
+            raise AppException("未配置图片生成 API，请在 .env 中设置 SEEDREAM_IMAGE_URL 和 SEEDREAM_IMAGE_MODEL", 400)
 
         ref_data_urls = [image_to_data_url(url) for url in ref_image_paths] if ref_image_paths else []
 
@@ -52,7 +53,7 @@ class ImageGenService:
         if success_count == 0:
             errors = [r.get("error", "?") for r in results]
             first_error = next((e for e in errors if e != "internal error"), errors[0])
-            raise RuntimeError(f"全部 {len(results)} 张图片生成失败: {errors.count(first_error)}/{len(results)} 张报 {first_error}")
+            raise AppException(f"全部 {len(results)} 张图片生成失败: {errors.count(first_error)}/{len(results)} 张报 {first_error}", 502)
 
         return {
             "images": all_images,

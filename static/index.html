@@ -875,9 +875,9 @@ video { width: 100%; border-radius: var(--radius-sm); background: #000; margin-t
           <option value="strategy">🎯 策略</option>
           <option value="image_gen">🖼️ 生图</option>
           <option value="script_gen">📝 脚本</option>
-          <option value="tts_gen">🔊 配音</option>
+          <option value="tts">🔊 配音</option>
           <option value="video_compose">🎬 合成</option>
-          <option value="video_shot">🎥 分镜</option>
+          <option value="shot_gen">🎥 分镜</option>
         </select>
         <select id="histStatusFilter" onchange="loadHistory()" style="height:36px;padding:4px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);">
           <option value="">全部状态</option>
@@ -2601,7 +2601,7 @@ function copyAllUrls() {
 // ══════════════════════════════════════════════════════
 let histPage = 0;
 const HIST_PS = 15;
-const TYPE_LABEL = { scrape:'📦 采集', analysis:'📊 分析', strategy:'🎯 策略', image_gen:'🖼️ 生图', script_gen:'📝 脚本', tts_gen:'🔊 配音', video_compose:'🎬 合成', video_shot:'🎥 分镜' };
+const TYPE_LABEL = { scrape:'📦 采集', analysis:'📊 分析', strategy:'🎯 策略', image_gen:'🖼️ 生图', script_gen:'📝 脚本', tts:'🔊 配音', video_compose:'🎬 合成', shot_gen:'🎥 分镜' };
 const STATUS_BADGE = { PENDING:'⏳', RUNNING:'🔄', SUCCESS:'✅', FAILURE:'❌' };
 const STATUS_COLOR = { PENDING:'#888', RUNNING:'#2196F3', SUCCESS:'#4CAF50', FAILURE:'#f44336' };
 
@@ -2614,7 +2614,7 @@ async function loadHistory() {
   try {
     const res = await fetch(`${A8_API}/tasks?${params}`);
     const payload = await res.json();
-    if (!payload.data) { showS('histStatusMsg','error','无数据'); return; }
+    if (!payload.data) { showS('histStatusMsg','error', payload.message || '无数据'); return; }
     const d = payload.data;
     document.getElementById('histBody').innerHTML = (d.tasks||[]).map(t => {
       const preview = t.status === 'SUCCESS' ? _histPreview(t) : (t.error_message || '—');
@@ -2641,7 +2641,7 @@ function _histPreview(t) {
     if (t.type === 'scrape') return `采集完成 · ${t.result_json?.image_count||0} 张`;
     if (t.type === 'video_compose') return `视频已生成 · ${t.result_json?.duration_sec?.toFixed(1)||'?'}秒`;
     if (t.type === 'script_gen') return '脚本已生成';
-    if (t.type === 'tts_gen') return '配音已生成';
+    if (t.type === 'tts') return '配音已生成';
     if (t.type === 'analysis') return '分析完成';
     if (t.type === 'strategy') return '策略已生成';
     if (t.type === 'image_gen') return '图片已生成';

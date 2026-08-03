@@ -11,6 +11,7 @@ from typing import Any, Optional
 import httpx
 
 from app.core.config import settings
+from app.core.exceptions import AppException
 from app.llm.base import BaseLLMClient
 from app.llm.factory import create_multimodal_client, create_text_client
 
@@ -86,7 +87,7 @@ class AIClient:
         )
         scenes = result.get("scenes", [])
         if not scenes:
-            raise ValueError(f"AI 镜头场景生成返回空 scenes: {result}")
+            raise AppException(f"AI 镜头场景生成返回空 scenes: {result}")
         normalized = []
         for s in scenes:
             if isinstance(s, str):

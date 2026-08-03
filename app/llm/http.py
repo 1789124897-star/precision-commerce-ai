@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 import httpx
+from app.core.exceptions import AppException
 
 logger = logging.getLogger(__name__)
 
@@ -37,4 +38,4 @@ async def post_with_retry(
                 attempt + 1, max_retries, wait, type(e).__name__,
             )
             await asyncio.sleep(wait)
-    raise RuntimeError("HTTP 请求失败，已达最大重试次数")
+    raise AppException("HTTP 请求失败，已达最大重试次数", 502)

@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from app.core.paths import SCRIPTS_DIR
+from app.core.exceptions import AppException
 from app.core.utils import save_json
 from app.services.ai_client import AIClient
 from app.services.prompts import build_product_script_prompt
@@ -38,7 +39,7 @@ class ScriptGenerator:
         raw = await self.ai.generate_script(system_prompt=system_prompt, user_prompt=user_prompt)
         segments = raw.get("segments", [])
         if not segments:
-            raise ValueError("AI 返回的 segments 为空")
+            raise AppException("AI 返回的 segments 为空")
         result = self._build_result(segments)
 
         # 保存脚本文件

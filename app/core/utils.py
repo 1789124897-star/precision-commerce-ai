@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
+from app.core.exceptions import AppException
 from app.core.paths import UPLOAD_DIR
 
 _MIME_MAP = {
@@ -24,7 +25,7 @@ def image_to_data_url(filepath: str) -> str:
     filename = Path(filepath).name
     p = UPLOAD_DIR / filename
     if not p.exists():
-        raise FileNotFoundError(f"图片不存在: {p}")
+        raise AppException(f"图片不存在: {p}", 404)
     raw = p.read_bytes()
     mime = _MIME_MAP.get(p.suffix.lower(), "image/jpeg")
     encoded = base64.b64encode(raw).decode("utf-8")
