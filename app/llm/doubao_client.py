@@ -76,9 +76,7 @@ class DoubaoClient(BaseLLMClient):
         }
         t0 = time.monotonic()
         logger.info("豆包多模态请求开始 model=%s images=%d", self._model, len(image_data_urls))
-        data = await post_with_retry(
-            self._base_url, payload, headers=self._headers, timeout=180.0,
-        )
+        data = await post_with_retry(self._base_url, payload, headers=self._headers, timeout=180.0)
         elapsed = time.monotonic() - t0
         logger.info("豆包多模态请求完成 耗时=%.1fs", elapsed)
         result_text: str = data["choices"][0]["message"]["content"]

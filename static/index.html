@@ -1385,7 +1385,7 @@ async function genSelectedImages(key) {
       ...selectedMI.map(s => ({...s, source: 'main'})),
       ...selectedDP.map(s => ({...s, source: 'detail'}))
     ];
-    fd.append('images_data', JSON.stringify(tagged));
+    fd.append('prompts', JSON.stringify(tagged));
     const sizeEl = document.getElementById('genSize_' + key);
     if (sizeEl && sizeEl.value) fd.append('size', sizeEl.value);
 
@@ -2445,7 +2445,7 @@ async function doImageGen() {
 
   const fd = new FormData();
   const specs = prompts.map((p, i) => ({position: i + 1, prompt: p, source: "", type: "standalone"}));
-  fd.append('images_data', JSON.stringify(specs));
+  fd.append('prompts', JSON.stringify(specs));
   fd.append('size', size);
   for (const f of igRefFiles) fd.append('ref_images', f);
   console.log('[AI生图] 提交参考图数量:', igRefFiles.length);
@@ -2478,7 +2478,7 @@ function pollImageTask(taskId) {
           if (src) S._genImages.push({ url: src, type: img.type || 'AI生图', position: img.position, source: 'standalone' });
         });
         renderImageBank();
-        showS('igStatus', 'success', '✅ 生成完成');
+        showS('igStatus', 'success', '✅ 生成完成，在图库中查看');
         btn.disabled = false; btn.textContent = '🖼️ 生成图片';
       } else if (d.status === 'FAILURE') {
         clearInterval(poll);
@@ -2594,39 +2594,6 @@ function copyAllUrls() {
   const urls = (S._genImages || []).map(img => img.url).join('\n');
   if (!urls) { showS('igStatus', 'error', '图库为空'); return; }
   navigator.clipboard.writeText(urls).catch(() => showS('igStatus', 'error', '复制失败'));
-}
-
-async function downloadAllImages() {
-  const imgs = S._genImages || [];
-  if (!imgs.length) { showS('igStatus', 'error', '图库为空'); return; }
-
-  // File System Access API：自选文件夹
-  if (window.showDirectoryPicker) {
-    try {
-      const dir = await window.showDirectoryPicker({ startIn: 'documents' });
-      let ok = 0;
-      for (let i = 0; i < imgs.length; i++) {
-        const img = imgs[i];
-        const name = (img.type || img.filename || 'image') + '_' + (i + 1) + '.png';
-        try {
-          const res = await fetch(`/api/v1/images/proxy?url=${encodeURIComponent(img.url)}`);
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const blob = await res.blob();
-          const handle = await dir.getFileHandle(name, { create: true });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          ok++;
-        } catch (e) { console.warn('下载失败:', name, e); }
-      }
-      showS('igStatus', 'success', `已保存 ${ok}/${imgs.length} 张`);
-      return;
-    } catch (e) {
-      if (e.name !== 'AbortError') showS('igStatus', 'error', '保存失败: ' + e.message);
-      return;
-    }
-    return;
-  }
 }
 
 // ══════════════════════════════════════════════════════

@@ -24,6 +24,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from proglog import ProgressBarLogger
 
 from app.core.paths import VIDEO_DIR, from_output_url
+from app.core.srt_utils import srt_to_seconds
 from app.services.seedance_service import SeedanceService
 from app.services.shot_grouper import ShotGrouper
 
@@ -68,8 +69,8 @@ class VideoComposer:
         audio_path: str,
         srt_path: str,
         task_id: str,
-        aspect_ratio: str = "9:16",
-        resolution: str = "720p",
+        aspect_ratio: str = "",
+        resolution: str = "",
         transition: str = "fade",
         quality_check: bool = True,
         on_progress: Optional[Callable[[float, str], None]] = None,
@@ -79,6 +80,8 @@ class VideoComposer:
         on_progress: 进度回调 (0~1, stage_text)
         返回: {"video_path", "duration_sec", "quality"}
         """
+        aspect_ratio = aspect_ratio or "9:16"
+        resolution = resolution or "720p"
         def report(p, s):
             self._report(p, s, on_progress)
 
@@ -363,8 +366,8 @@ class VideoComposer:
             try:
                 time_line = lines[1]
                 start, end = time_line.split(" --> ")
-                start_sec = self._srt_time(start)
-                end_sec = self._srt_time(end)
+                start_sec = srt_to_seconds(start)
+                end_sec = srt_to_seconds(end)
                 text = " ".join(lines[2:])
                 subtitles.append((start_sec, end_sec, text))
             except Exception:
@@ -410,11 +413,6 @@ class VideoComposer:
             clips.append(sub_clip)
 
         return clips
-
-    def _srt_time(self, t: str) -> float:
-        h, m, rest = t.split(":")
-        s, ms = rest.split(",") if "," in rest else (rest, "0")
-        return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
 
     def _load_font(self, size: int) -> ImageFont.FreeTypeFont:
         if FONT_PATH and FONT_PATH.exists():
@@ -466,8 +464,8 @@ class VideoComposer:
         audio_path: str,
         srt_path: str,
         task_id: str,
-        aspect_ratio: str = "9:16",
-        resolution: str = "720p",
+        aspect_ratio: str = "",
+        resolution: str = "",
         generate_audio: bool = False,
         on_progress: Optional[Callable[[float, str], None]] = None,
         segment_durations: Optional[list[float]] = None,
@@ -476,6 +474,8 @@ class VideoComposer:
 
         segment_durations: TTS 实际时长，非空时自动合并短段为镜头组（≥4s）
         """
+        aspect_ratio = aspect_ratio or "9:16"
+        resolution = resolution or "720p"
         def report(p, s):
             self._report(p, s, on_progress)
 

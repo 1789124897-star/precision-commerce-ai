@@ -1,5 +1,7 @@
 """通用工具函数"""
 import base64
+import json
+import re
 import shutil
 import uuid
 from pathlib import Path
@@ -36,3 +38,21 @@ def save_upload(file: UploadFile, prefix: str) -> str:
     with filepath.open("wb") as f:
         shutil.copyfileobj(file.file, f)
     return "/output/uploads/" + filepath.name
+
+
+# ── 文件名安全清洗 ──
+
+_FILENAME_ILLEGAL_RE = re.compile(r'[\\/:*?"<>|]')
+
+
+def sanitize_filename(name: str) -> str:
+    """替换文件名中的非法字符为下划线"""
+    return _FILENAME_ILLEGAL_RE.sub("_", name)
+
+
+# ── JSON 文件落盘 ──
+
+
+def save_json(path: Path, data: object) -> None:
+    """将数据以 JSON 格式写入文件（ensure_ascii=False, indent=2, utf-8）"""
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

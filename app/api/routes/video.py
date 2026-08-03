@@ -40,7 +40,7 @@ async def generate_tts(body: GenerateTTSRequest, db: AsyncSession = Depends(get_
     """TTS 配音：将脚本文本转为音频 + SRT 字幕。"""
     task = await TaskService.create_and_dispatch(
         db,
-        task_type="tts_gen",
+        task_type="tts",
         request_json={
             "text": body.text,
             "voice": body.voice,

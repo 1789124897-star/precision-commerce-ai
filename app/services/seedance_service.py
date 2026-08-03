@@ -4,7 +4,7 @@ import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -76,7 +76,8 @@ class SeedanceService:
 
         audio_label = "有声" if generate_audio else "无声"
         logger.info(
-            f"Seedance 提交 [{mode}][{audio_label}]: model=%s duration=%ds prompt=%s...",
+            "Seedance 提交 [%s][%s]: model=%s duration=%ds prompt=%s...",
+            mode, audio_label,
             settings.SEEDANCE_VIDEO_MODEL, int(duration_sec), prompt[:60],
         )
 
@@ -164,7 +165,7 @@ class SeedanceService:
             self._notify(s, d, shot_index, on_progress)
 
         notify("提交生成", f"url: {image_url[:50]}... prompt: {prompt[:50]}...")
-        task_id = await self.submit_task(image_url, prompt, aspect_ratio, duration_sec, generate_audio=generate_audio, resolution=resolution)
+        task_id = await self.submit_task(image_url=image_url, prompt=prompt, aspect_ratio=aspect_ratio, duration_sec=duration_sec, generate_audio=generate_audio, resolution=resolution)
 
         notify("等待生成", f"task: {task_id}")
         video_url = await self.poll_task(
@@ -307,6 +308,6 @@ class SeedanceService:
             resolution=resolution,
         )
 
-    def generate_shot_sync(self, **kwargs) -> Path:
+    def generate_shot_sync(self, **kwargs: Any) -> Path:
         """同步包装，供 Celery 任务调用"""
         return asyncio.run(self.generate_shot(**kwargs))

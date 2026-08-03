@@ -1,7 +1,5 @@
-""" 生图路由 """
-import httpx
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
-from fastapi.responses import Response
+"""生图路由"""
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -12,21 +10,9 @@ from app.tasks.image_gen import generate_images_task
 router = APIRouter(prefix="/images", tags=["Images"])
 
 
-@router.get("/proxy")
-async def proxy_image(url: str = Query(..., description="图片 CDN URL")):
-    """代理拉取 CDN 图片，绕过浏览器 CORS 限制"""
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.get(url)
-        r.raise_for_status()
-    return Response(
-        content=r.content,
-        media_type=r.headers.get("content-type", "image/png"),
-    )
-
-
 @router.post("/generate")
 async def submit_image(
-    images_data: str = Form(...),
+    prompts: str = Form(...),
     ref_images: list[UploadFile] = File(default_factory=list),
     size: str = Form("2048x2048"),
     db: AsyncSession = Depends(get_db),
@@ -37,7 +23,7 @@ async def submit_image(
         db,
         task_type="image_gen",
         request_json={
-            "images_data": images_data,
+            "prompts": prompts,
             "ref_image_paths": ref_image_paths,
             "size": size,
         },

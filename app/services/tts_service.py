@@ -4,13 +4,14 @@ import asyncio
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 import edge_tts
 from aiohttp import ClientError
 from edge_tts.exceptions import EdgeTTSException
 
 from app.core.paths import AUDIO_DIR, to_output_url
-from app.models.task import gen_task_id
+from app.core.srt_utils import seconds_to_srt, srt_to_seconds
 from app.services.ai_client import AIClient
 from app.services.script_generator import ScriptGenerator
 
@@ -27,7 +28,7 @@ _PUNCTUATION = {"。", "！", "？", "!", "?", "，", ",", "、", "：", "；", 
 class TTSEngine:
     """edge-tts 合成：文本 → 音频 + 逐字字幕"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         os.environ.setdefault("NO_PROXY", "speech.platform.bing.com,*.bing.com")
         os.environ.setdefault("no_proxy", "speech.platform.bing.com,*.bing.com")
 
@@ -42,13 +43,10 @@ class TTSEngine:
     ) -> dict:
         """文本 → 音频 + SRT + 镜头分组"""
         text = text.strip()
-        if not text:
-            raise ValueError("配音文本为空")
         voice = voice or DEFAULT_VOICE
         rate = rate or DEFAULT_RATE
 
         # 文本落盘
-        task_id = task_id or gen_task_id()
         ScriptGenerator.save_text(text=text, task_id=task_id)
 
         out_dir = AUDIO_DIR / task_id
@@ -57,7 +55,7 @@ class TTSEngine:
         srt_path = out_dir / "subtitle.srt"
 
         # 流式合成：同时拿到音频字节 + 逐字时间戳
-        result = await _synthesize_with_words(text, audio_path, voice=voice, rate=rate)
+        result = await _synthesize_with_words(text=text, output_path=audio_path, voice=voice, rate=rate)
 
         # 逐字时间戳 → 按标点切句 → SRT
         _generate_srt_from_words(result["words"], srt_path)
@@ -80,7 +78,7 @@ class TTSEngine:
             "grouped_shots": grouped_shots,
         }
 
-    def run_sync(self, **kwargs) -> dict:
+    def run_sync(self, **kwargs: Any) -> dict:
         """同步包装，供 Celery 任务调用"""
         return asyncio.run(self.synthesize_from_text(**kwargs))
 
@@ -104,7 +102,7 @@ async def _fill_scene_prompts(grouped_shots: list[dict]) -> None:
             shot["scene_prompt_en"] = ""
 
 
-async def _synthesize_with_words(text: str, output_path: Path, voice: str, rate: str, max_retries: int = 3,) -> dict:
+async def _synthesize_with_words(text: str, output_path: Path, voice: str, rate: str, max_retries: int = 3) -> dict:
     """流式合成音频，返回逐字时间戳列表"""
     last_err = None
     for attempt in range(max_retries):
@@ -188,7 +186,7 @@ def _generate_srt_from_words(words: list[tuple[int, int, str]], output_path: Pat
         start_sec = ch["start_tick"] / TICKS_PER_SEC
         end_sec = ch["end_tick"] / TICKS_PER_SEC
         lines.append(f"{i}")
-        lines.append(f"{_secs_to_srt(start_sec)} --> {_secs_to_srt(end_sec)}")
+        lines.append(f"{seconds_to_srt(start_sec)} --> {seconds_to_srt(end_sec)}")
         lines.append(ch["text"])
         lines.append("")
 
@@ -210,8 +208,8 @@ def _parse_srt_entries(srt_path: Path) -> list[dict]:
         times = lines[1].split(" --> ")
         if len(times) != 2:
             continue
-        start_sec = _srt_to_secs(times[0].strip())
-        end_sec = _srt_to_secs(times[1].strip())
+        start_sec = srt_to_seconds(times[0].strip())
+        end_sec = srt_to_seconds(times[1].strip())
         text = "".join(lines[2:])
         entries.append({
             "text": text,
@@ -263,19 +261,3 @@ def _flush_chunk(buf_words: list[tuple[int, int, str]]) -> dict:
     end = last[0] + last[1]
     text = "".join(w[2] for w in buf_words if w[2] not in _PUNCTUATION)
     return {"start_tick": start, "end_tick": end, "text": text}
-
-
-def _secs_to_srt(secs: float) -> str:
-    """秒 → SRT 时间格式 HH:MM:SS,mmm"""
-    h = int(secs // 3600)
-    m = int((secs % 3600) // 60)
-    s = int(secs % 60)
-    ms = int((secs - int(secs)) * 1000)
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
-
-def _srt_to_secs(timestamp: str) -> float:
-    """SRT 时间戳 HH:MM:SS,mmm → 秒"""
-    h, m, rest = timestamp.split(":")
-    s, ms = rest.split(",")
-    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000

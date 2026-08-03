@@ -1,5 +1,4 @@
 """1688 商品图抓取，DrissionPage 浏览器自动化。"""
-import json
 import logging
 import re
 import shutil
@@ -13,6 +12,7 @@ from DrissionPage import ChromiumOptions, ChromiumPage
 
 from app.core.config import settings
 from app.core.paths import IMAGE_DIR, SCRAPER_CONFIG
+from app.core.utils import sanitize_filename, save_json
 from app.services.anti_crawl import (
     ensure_fresh_cookies,
     load_cookies,
@@ -30,9 +30,9 @@ _IMG_PREFIX = {"main": "主图", "sku": "SKU", "detail": "详情图"}
 
 
 class ImageScraper:
+    """1688 商品图抓取，DrissionPage 浏览器自动化"""
 
-    def __init__(self):
-
+    def __init__(self) -> None:
         self.images: list[dict] = []
         self._proxy: str = ""
         self.proxy_manager = ProxyManager(
@@ -58,7 +58,7 @@ class ImageScraper:
 
         metadata = self._build_metadata(task_id, product_name, product_url)
         meta_path = task_dir / "metadata.json"
-        meta_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+        save_json(meta_path, metadata)
         logger.info("元数据已保存: %s", meta_path)
 
         return {
@@ -169,7 +169,7 @@ class ImageScraper:
 
                 label = self._extract_sku_label(node, cfg)
                 safe_label = (
-                    re.sub(r'[\\/:*?"<>|]', "_", label) if label else str(idx)
+                    sanitize_filename(label) if label else str(idx)
                 )
                 filename = f"{prefix}_{idx}_{safe_label}.jpg"
                 if self._download(url, task_dir, filename):
@@ -214,7 +214,7 @@ class ImageScraper:
 
     def _download(self, url: str, save_dir: Path, filename: str) -> bool:
         """下载单张图片，过滤过小/非图片响应。"""
-        filename = re.sub(r'[\\/:*?"<>|]', "_", filename)
+        filename = sanitize_filename(filename)
         try:
             proxy = self._proxy
             proxies = {"http": proxy, "https": proxy} if proxy else {"http": "", "https": ""}

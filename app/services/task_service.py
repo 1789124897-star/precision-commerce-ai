@@ -6,7 +6,7 @@ from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Task
-from app.models.task import TASK_TYPES, gen_task_id
+from app.models.task import gen_task_id
 from app.repositories.task_repo import AsyncTaskRepo
 
 
@@ -17,6 +17,7 @@ def _make_request_hash(request_json: dict[str, Any]) -> str:
 
 
 class TaskService:
+    """Task 创建与下发"""
 
     @staticmethod
     async def create_and_dispatch(
@@ -27,11 +28,8 @@ class TaskService:
         celery_task: Any,
         parent_task_id: Optional[str] = None,
     ) -> Task:
-        if task_type not in TASK_TYPES:
-            raise ValueError(f"无效的任务类型: {task_type}，合法值: {TASK_TYPES}")
 
         request_hash = _make_request_hash(request_json)
-
         existing = await AsyncTaskRepo.find_duplicate(db, task_type, request_hash)
         if existing:
             return existing

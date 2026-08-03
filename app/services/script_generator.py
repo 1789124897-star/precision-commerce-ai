@@ -1,9 +1,10 @@
 ﻿"""口播脚本生成 — DeepSeek JSON 模式 + 段数强制对齐"""
 import asyncio
-import json
 import logging
+from typing import Any
 
 from app.core.paths import SCRIPTS_DIR
+from app.core.utils import save_json
 from app.services.ai_client import AIClient
 from app.services.prompts import build_product_script_prompt
 
@@ -11,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class ScriptGenerator:
-    def __init__(self):
+    """口播脚本生成 — DeepSeek JSON 模式 + 段数强制对齐"""
+
+    def __init__(self) -> None:
         self.ai = AIClient()
 
     async def generate(
@@ -22,11 +25,10 @@ class ScriptGenerator:
         task_id: str = "",
     ) -> dict:
 
-        if not system_prompt:
-            system_prompt = (
-                "你是一名拥有百万粉丝的抖音/快手电商带货达人，专攻家居日用类产品。"
-                "开场3秒抛出痛点或场景，用语简洁口语化，结尾有CTA，严格返回JSON。"
-            )
+        system_prompt = system_prompt or (
+            "你是一名拥有百万粉丝的抖音/快手电商带货达人，专攻家居日用类产品。"
+            "开场3秒抛出痛点或场景，用语简洁口语化，结尾有CTA，严格返回JSON。"
+        )
 
         user_prompt = build_product_script_prompt(
             content=content,
@@ -40,10 +42,10 @@ class ScriptGenerator:
         result = self._build_result(segments)
 
         # 保存脚本文件
-        script_path = self._save(task_id=task_id or "script", result=result)
+        script_path = self._save(task_id=task_id, result=result)
         return {"script": result, "script_path": script_path}
 
-    def run_sync(self, **kwargs) -> dict:
+    def run_sync(self, **kwargs: Any) -> dict:
         """同步包装，供 Celery 任务调用"""
         return asyncio.run(self.generate(**kwargs))
 
@@ -74,7 +76,7 @@ class ScriptGenerator:
         task_dir = SCRIPTS_DIR / task_id
         task_dir.mkdir(parents=True, exist_ok=True)
         filepath = task_dir / "script.json"
-        filepath.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        save_json(filepath, result)
         return str(filepath)
 
     @staticmethod

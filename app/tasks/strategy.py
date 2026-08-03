@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
     retry_jitter=True,
 )
 def generate_strategies_task(self, task_id: str):
+
     logger.info("开始 task_id=%s", task_id)
+    
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:

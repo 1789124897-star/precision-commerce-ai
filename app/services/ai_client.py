@@ -1,7 +1,7 @@
-﻿"""统一 AI 客户端——基于 LLM 工厂模式组合多个提供者。
+﻿"""统一 AI 客户端。
 
-文本推理委托 DeepSeekClient，多模态委托 DoubaoClient，
-图片生成委托 Seedream API。调用方只需 AIClient()，无感知底层切换。
+文本走 DeepSeek，多模态走豆包，生图走 Seedream。
+调用方只跟 AIClient 打交道，不需要关心底层是谁。
 """
 
 import asyncio
@@ -18,13 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class AIClient:
-    """统一 AI 入口——工厂模式组合 + 协议委托。
+    """AI 统一入口。
 
-    架构：
-        AIClient (facade)
-        ├── DeepSeekClient  → chat / generate_json（纯文本）
-        ├── DoubaoClient    → analyze_multimodal（多模态）
-        └── Seedream API    → generate_images（生图）
+    文本 → DeepSeek
+    多模态 → 豆包
+    生图 → Seedream
     """
 
     def __init__(self) -> None:
@@ -62,9 +60,7 @@ class AIClient:
             max_tokens=8192,
         )
 
-    async def generate_script(
-        self, *, system_prompt: str, user_prompt: str,
-    ) -> dict[str, Any]:
+    async def generate_script(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         """口播脚本：系统提示词 + 用户提示词 → JSON 脚本。"""
         return await self._text_client.generate_json(
             system_prompt=system_prompt,
@@ -101,9 +97,7 @@ class AIClient:
                 )
         return normalized
 
-    # ==================================================================
-    # 图片生成 → Seedream（独立于 LLM 抽象层）
-    # ==================================================================
+    # 图片生成 → Seedream
 
     async def generate_images(
         self,
@@ -112,12 +106,11 @@ class AIClient:
         ref_image_data_urls: Optional[list[str]] = None,
         size: str = "2048x2048",
     ) -> list[dict[str, Any]]:
-        """并发生图：每张图按 spec 提示词生成，Semaphore 限流。"""
+
+        """并发生图，Semaphore 限流。"""
         semaphore = asyncio.Semaphore(settings.IMAGE_MAX_CONCURRENT)
 
-        def _result(
-            index: int, spec: dict[str, Any], url: str = "", error: str = "",
-        ) -> dict[str, Any]:
+        def _result(index: int, spec: dict[str, Any], url: str = "", error: str = "",) -> dict[str, Any]:
             return {
                 "position": spec.get("position", index + 1),
                 "type": spec.get("type", ""),
@@ -127,16 +120,12 @@ class AIClient:
                 "error": error,
             }
 
-        async def generate_one(
-            index: int, spec: dict[str, Any],
-        ) -> dict[str, Any]:
+        async def generate_one(index: int, spec: dict[str, Any]) -> dict[str, Any]:
             async with semaphore:
                 prompt = spec.get("prompt", "").strip()
                 if not prompt:
                     return _result(index, spec, error="prompt is empty")
-                img_size = (
-                    "1440x2560" if spec.get("source") == "detail" else size
-                )
+                img_size = ("1440x2560" if spec.get("source") == "detail" else size)
                 try:
                     payload: dict[str, Any] = {
                         "model": settings.SEEDREAM_IMAGE_MODEL,

@@ -19,16 +19,17 @@ logger = logging.getLogger(__name__)
 class ImageGenService:
     """AI 生图服务"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.ai = AIClient()
 
     async def run(
         self,
-        images_data: str = "",
-        ref_image_paths: Optional[list[str]] = None,
-        size: str = "2048x2048",
         task_id: str = "",
+        prompts: str = "",
+        size: str = "",
+        ref_image_paths: Optional[list[str]] = None,
     ) -> dict:
+        size = size or "2048x2048"
         if not settings.SEEDREAM_IMAGE_URL or not settings.SEEDREAM_IMAGE_MODEL:
             raise ValueError("未配置图片生成 API，请在 .env 中设置 SEEDREAM_IMAGE_URL 和 SEEDREAM_IMAGE_MODEL")
 
@@ -39,7 +40,7 @@ class ImageGenService:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        specs = json.loads(images_data)
+        specs = json.loads(prompts)
         results = await self.ai.generate_images(
             specs=specs,
             ref_image_data_urls=ref_data_urls,

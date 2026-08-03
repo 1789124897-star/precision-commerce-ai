@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class AnalysisService:
     """产品分析 + 策略生成服务"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.ai = AIClient()
 
     async def run(
@@ -26,7 +26,7 @@ class AnalysisService:
         custom_prompt: str = "",
         image_paths: Optional[list[str]] = None,
     ) -> dict:
-        """产品分析 → 返回 {"analysis": str, "product_name": str}"""
+        """产品分析：图片 + 商品信息 → 分析报告。"""
         image_data_urls = [image_to_data_url(url) for url in image_paths] if image_paths else []
 
         user_prompt = build_analysis_prompt(name, function, price, extra, custom_prompt)
@@ -42,7 +42,7 @@ class AnalysisService:
         return asyncio.run(self.run(**kwargs))
 
     async def run_strategies(self, analysis: str, system_prompt: str = "") -> dict:
-        """并发调用 3 套策略，返回 {"strategies": {type: text}}"""
+        """并发生成3套运营策略。"""
         coroutines = []
         for code, meta in STRATEGY_TYPES.items():
             prompt = build_strategy_prompt(analysis, code, meta["name"], system_prompt)
@@ -56,7 +56,4 @@ class AnalysisService:
 
     def run_strategies_sync(self, **kwargs: Any) -> dict:
         """同步包装，供 Celery 任务调用"""
-        return asyncio.run(self.run_strategies(
-            analysis=kwargs.get("analysis", ""),
-            system_prompt=kwargs.get("system_prompt", ""),
-        ))
+        return asyncio.run(self.run_strategies(**kwargs))

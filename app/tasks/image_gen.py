@@ -23,7 +23,9 @@ logger = logging.getLogger(__name__)
     retry_jitter=True,
 )
 def generate_images_task(self, task_id: str):
+
     logger.info("开始 task_id=%s", task_id)
+
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
@@ -34,7 +36,9 @@ def generate_images_task(self, task_id: str):
     try:
         result = ImageGenService().run_sync(**request_json, task_id=task_id)
     except Exception as e:
+
         logger.exception("失败 task_id=%s", task_id)
+        
         with SyncSession() as db:
             TaskRepo.set_failure(db, task_id, str(e))
             db.commit()
