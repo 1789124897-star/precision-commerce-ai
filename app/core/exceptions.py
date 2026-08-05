@@ -1,4 +1,4 @@
-"""业务异常 — 抛出时指定 HTTP 状态码，全局 handler 自动转 JSON 响应。"""
+"""业务异常"""
 
 
 class AppException(Exception):

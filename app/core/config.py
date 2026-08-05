@@ -14,10 +14,19 @@ class Settings(BaseSettings):
     DOUBAO_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
     DOUBAO_MODEL: str
 
+    # LLM Provider 切换
+    TEXT_PROVIDER: str = "deepseek"
+    MULTIMODAL_PROVIDER: str = "doubao"
+
+    # Kimi K3 — 多模态
+    KIMI_API_KEY: str = ""
+    KIMI_BASE_URL: str = "https://api.moonshot.cn/v1/chat/completions"
+    KIMI_MODEL: str = "kimi-k3"
+
     # DeepSeek — 纯文本策略
-    TEXT_MODEL: str = "deepseek-v4-pro"
-    TEXT_BASE_URL: str = "https://api.deepseek.com/v1/chat/completions"
-    TEXT_API_KEY: str
+    DEEPSEEK_MODEL: str = "deepseek-v4-pro"
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1/chat/completions"
+    DEEPSEEK_API_KEY: str
 
     # Seedream 生图
     SEEDREAM_IMAGE_URL: str

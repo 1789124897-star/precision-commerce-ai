@@ -77,7 +77,7 @@ async def compose_video(body: ComposeVideoRequest, db: AsyncSession = Depends(ge
         db,
         task_type="video_compose",
         request_json={
-            "image_urls": body.images,
+            "images": body.images,
             "audio_path": body.audio_path,
             "srt_path": body.srt_path,
             "aspect_ratio": body.aspect_ratio,

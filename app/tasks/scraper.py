@@ -29,7 +29,8 @@ def scrape_product_task(self, task_id: str):
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
-            raise ValueError(f"任务不存在: {task_id}")
+            logger.error("任务不存在 task_id=%s", task_id)
+            return {"task_id": task_id, "status": "NOT_FOUND"}
         url = (task.request_json or {}).get("url", "")
         db.commit()
 

@@ -1,8 +1,4 @@
-﻿"""统一 AI 客户端。
-
-文本走 DeepSeek，多模态走豆包，生图走 Seedream。
-调用方只跟 AIClient 打交道，不需要关心底层是谁。
-"""
+"""统一 AI 客户端"""
 
 import asyncio
 import logging
@@ -12,7 +8,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.llm.base import BaseLLMClient
+from app.llm.base import BaseLLMClient, BaseMultimodalClient
 from app.llm.factory import create_multimodal_client, create_text_client
 
 logger = logging.getLogger(__name__)
@@ -28,7 +24,7 @@ class AIClient:
 
     def __init__(self) -> None:
         self._text_client: BaseLLMClient = create_text_client()
-        self._multimodal_client: BaseLLMClient = create_multimodal_client()
+        self._multimodal_client: BaseMultimodalClient = create_multimodal_client()
 
     # ==================================================================
     # 多模态分析 → 豆包

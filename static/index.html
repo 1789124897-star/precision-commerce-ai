@@ -2033,7 +2033,7 @@ async function doComposePremium() {
         reject
       );
     });
-  } catch(e) { showS('vidComposeStatus', 'error', `合成失败: ${e.message}`); }
+  } catch(e) { showS('vidComposeStatus', 'error', `合成失败: ${e?.message || e || '未知错误'}`); }
   finally {
     wrap.style.display = 'none';
     btn.disabled = false; btn.textContent = '🎬 合成视频';
@@ -2272,7 +2272,7 @@ async function doCompose() {
         reject
       );
     });
-  } catch(e) { showS('vidComposeStatus', 'error', `合成失败: ${e.message}`); }
+  } catch(e) { showS('vidComposeStatus', 'error', `合成失败: ${e?.message || e || '未知错误'}`); }
   finally {
     wrap.style.display = 'none';
     btn.disabled = false; btn.textContent = '🎬 合成视频';

@@ -78,7 +78,8 @@ def compose_video_task(self, task_id: str):
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
-            raise ValueError(f"任务不存在: {task_id}")
+            logger.error("任务不存在 task_id=%s", task_id)
+            return {"task_id": task_id, "status": "NOT_FOUND"}
         request_json = task.request_json or {}
         db.commit()
 
@@ -131,7 +132,8 @@ def compose_premium_video_task(self, task_id: str):
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
-            raise ValueError(f"任务不存在: {task_id}")
+            logger.error("任务不存在 task_id=%s", task_id)
+            return {"task_id": task_id, "status": "NOT_FOUND"}
         request_json = task.request_json or {}
         db.commit()
 
@@ -185,7 +187,8 @@ def generate_shot_task(self, task_id: str):
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
-            raise ValueError(f"任务不存在: {task_id}")
+            logger.error("任务不存在 task_id=%s", task_id)
+            return {"task_id": task_id, "status": "NOT_FOUND"}
         request_json = task.request_json or {}
         db.commit()
 

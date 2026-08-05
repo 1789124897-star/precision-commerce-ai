@@ -10,11 +10,10 @@ import edge_tts
 from aiohttp import ClientError
 from edge_tts.exceptions import EdgeTTSException
 
-from app.core.paths import AUDIO_DIR, to_output_url
+from app.core.paths import AUDIO_DIR, SCRIPTS_DIR, to_output_url
 from app.core.exceptions import AppException
 from app.core.srt_utils import seconds_to_srt, srt_to_seconds
 from app.services.ai_client import AIClient
-from app.services.script_generator import ScriptGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,9 @@ class TTSEngine:
         rate = rate or DEFAULT_RATE
 
         # 文本落盘
-        ScriptGenerator.save_text(text=text, task_id=task_id)
+        script_dir = SCRIPTS_DIR / task_id
+        script_dir.mkdir(parents=True, exist_ok=True)
+        (script_dir / "script.txt").write_text(text, encoding="utf-8")
 
         out_dir = AUDIO_DIR / task_id
         out_dir.mkdir(parents=True, exist_ok=True)

@@ -21,7 +21,7 @@ class ScriptGenerator:
     async def generate(
         self,
         content: str,
-        target_segments: int = 5,
+        target_segments: int = 8,
         system_prompt: str = "",
         task_id: str = "",
     ) -> dict:
@@ -78,13 +78,4 @@ class ScriptGenerator:
         task_dir.mkdir(parents=True, exist_ok=True)
         filepath = task_dir / "script.json"
         save_json(filepath, result)
-        return str(filepath)
-
-    @staticmethod
-    def save_text(text: str, task_id: str) -> str:
-        """保存纯文本脚本，返回路径。"""
-        task_dir = SCRIPTS_DIR / task_id
-        task_dir.mkdir(parents=True, exist_ok=True)
-        filepath = task_dir / "script.txt"
-        filepath.write_text(text, encoding="utf-8")
         return str(filepath)

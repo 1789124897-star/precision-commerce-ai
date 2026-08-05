@@ -24,11 +24,14 @@ logger = logging.getLogger(__name__)
     retry_jitter=True,
 )
 def analyze_product_task(self, task_id: str):
+
     logger.info("开始 task_id=%s", task_id)
+    
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
-            raise ValueError(f"任务不存在: {task_id}")
+            logger.error("任务不存在 task_id=%s", task_id)
+            return {"task_id": task_id, "status": "NOT_FOUND"}
         request_json = task.request_json or {}
         db.commit()
 

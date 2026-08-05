@@ -3,7 +3,6 @@ import logging
 
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
-from app.models.task import STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
 from app.services.script_generator import ScriptGenerator
 
@@ -23,18 +22,22 @@ logger = logging.getLogger(__name__)
     retry_jitter=True,
 )
 def generate_script_task(self, task_id: str):
+
     logger.info("开始 task_id=%s", task_id)
+    
     with SyncSession() as db:
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
-            raise ValueError(f"任务不存在: {task_id}")
-        request_json = dict(task.request_json or {})
+            logger.error("任务不存在 task_id=%s", task_id)
+            return {"task_id": task_id, "status": "NOT_FOUND"}
+        request_json = task.request_json or {}
         db.commit()
 
     try:
-        result = ScriptGenerator().run_sync(**request_json, task_id=task_id)
+        result = ScriptGenerator().run_sync(**request_json)
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
+        
         with SyncSession() as db:
             TaskRepo.set_failure(db, task_id, str(e))
             db.commit()
@@ -45,4 +48,4 @@ def generate_script_task(self, task_id: str):
         db.commit()
 
     logger.info("完成 task_id=%s", task_id)
-    return {"task_id": task_id, "status": STATUS_SUCCESS}
+    return {"task_id": task_id, "status": "SUCCESS"}
