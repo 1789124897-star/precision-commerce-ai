@@ -27,7 +27,7 @@ from app.core.paths import VIDEO_DIR, from_output_url
 from app.core.exceptions import AppException
 from app.core.srt_utils import srt_to_seconds
 from app.services.seedance_service import SeedanceService
-from app.services.shot_grouper import ShotGrouper
+
 
 logger = logging.getLogger(__name__)
 
@@ -469,12 +469,9 @@ class VideoComposer:
         resolution: str = "",
         generate_audio: bool = False,
         on_progress: Optional[Callable[[float, str], None]] = None,
-        segment_durations: Optional[list[float]] = None,
+        segment_durations: Optional[list[float]] = None,  # noqa: ARG002
     ) -> dict:
-        """精品模式：按分镜列表逐镜生成视频
-
-        segment_durations: TTS 实际时长，非空时自动合并短段为镜头组（≥4s）
-        """
+        """精品模式：按分镜列表逐镜生成视频"""
         aspect_ratio = aspect_ratio or "9:16"
         resolution = resolution or "720p"
         def report(p, s):
@@ -510,34 +507,22 @@ class VideoComposer:
         speed = total_design_dur / total_duration if total_duration > 0 else 1.0
         logger.info(f"精铺: {total_shots} 镜, 设计时长 {total_design_dur:.1f}s, 音频 {total_duration:.1f}s, 速率 {speed:.2f}")
 
-        # ── 镜头组分组 ──
-        # 有 TTS 时长时，短段合并为镜头组（≥4s）
-        if segment_durations:
-            grouper = ShotGrouper(min_dur=4.0, max_dur=12.0)
-            shot_groups = grouper.group(shots, segment_durations)
-            logger.info(f"镜头组分组: {len(shots)} 镜 → {len(shot_groups)} 组")
-            # 统一迭代格式
-            iterate_over = shot_groups
-            use_groups = True
-        else:
-            # 无 TTS 时长 → 1:1 模式，底限 4s
-            iterate_over = [{
-                "shots": [s],
-                "tts_duration": s.get("duration_sec", 5),
-                "seedance_dur": max(4, int(ceil(s.get("duration_sec", 5)))),
-                "image_url": s.get("image_url", ""),
-                "first_frame_url": s.get("first_frame_url", ""),
-                "last_frame_url": s.get("last_frame_url", ""),
-                "scene_prompt": s.get("scene_prompt", ""),
-                "mode": "single",
-            } for s in shots]
-            use_groups = False
+        # ── 1:1 模式，每个 shot 视为一个镜头组 ──
+        iterate_over = [{
+            "shots": [s],
+            "tts_duration": s.get("duration_sec", 5),
+            "seedance_dur": max(4, int(ceil(s.get("duration_sec", 5)))),
+            "image_url": s.get("image_url", ""),
+            "first_frame_url": s.get("first_frame_url", ""),
+            "last_frame_url": s.get("last_frame_url", ""),
+            "scene_prompt": s.get("scene_prompt", ""),
+            "mode": "single",
+        } for s in shots]
 
         clips: list = []
         time_elapsed = 0.0
         total_items = len(iterate_over)
         for i, group in enumerate(iterate_over):
-            # 镜头组直接用已算好的 seedance_dur（已在 [4, 12] 内）
             dur = float(group["seedance_dur"])
             scene_prompt = group.get("scene_prompt", "")
             scene_prompt_en = group.get("scene_prompt_en", "")  # 英文 → Seedance
@@ -550,7 +535,7 @@ class VideoComposer:
             # 单段模式优先用预生成 clip
             pre_generated = group["shots"][0].get("clip_path", "") if group["shots"] else ""
 
-            label = f"镜组{i+1}/{total_items}" if use_groups else f"分镜{i+1}/{total_items}"
+            label = f"分镜{i+1}/{total_items}"
             pct = 0.05 + (i / total_items) * 0.55
             report(pct, f"{label} {dur:.1f}s" + (f" ×{segment_count}段" if segment_count > 1 else ""))
 

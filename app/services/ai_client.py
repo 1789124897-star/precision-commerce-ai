@@ -74,28 +74,31 @@ class AIClient:
         result = await self._text_client.generate_json(
             system_prompt=(
                 "你是资深广告导演，专攻电商短视频 Seedance AI 分镜。"
-                "输出纯英文视觉 prompt，包含 shot size / lens / camera movement / "
-                "lighting / action，每句 40-80 词，纯视觉描述无抽象形容词。"
+                "你的描述必须极其详尽，每个镜头独一无二，禁止笼统和空洞。"
             ),
             user_prompt=prompt,
-            temperature=0.6,
-            max_tokens=4096,
+            temperature=0.7,
+            max_tokens=8192,
         )
         scenes = result.get("scenes", [])
         if not scenes:
             raise AppException(f"AI 镜头场景生成返回空 scenes: {result}")
-        normalized = []
+        normalized: list[dict] = []
         for s in scenes:
             if isinstance(s, str):
                 normalized.append({"zh": s, "en": s})
             else:
-                normalized.append(
-                    {"zh": s.get("zh", ""), "en": s.get("en", s.get("zh", ""))}
-                )
+                normalized.append({
+                    "zh": s.get("zh", ""),
+                    "en": s.get("en", s.get("zh", "")),
+                })
+        if len(normalized) != len(voiceovers):
+            raise AppException(
+                f"AI 场景描述数量不匹配: 期望 {len(voiceovers)} 组，实际 {len(normalized)} 组"
+            )
         return normalized
 
     # 图片生成 → Seedream
-
     async def generate_images(
         self,
         *,

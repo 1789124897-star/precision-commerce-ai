@@ -193,14 +193,16 @@ def build_product_script_prompt(content: str = "", target_segments: int = 8) -> 
 
     return f"""你是一名资深广告导演。根据产品信息撰写{target_segments}段口播脚本。
 
-每段 15-30 字。
-口语化有网感，每段完整独立，不需要分段间过渡词。
+每段 15-30 字（含标点）。
+口语化有网感，每段独立成句，必须使用标点符号：
+- 逗号分隔语气停顿，句号/感叹号/问号收尾
+- 不要出现无标点的纯文字长句
 
 产品信息：
 {content}
 
 只输出纯 JSON：
-{{"segments":[{{"type":"hook","voiceover":"洗澡出来台面全是水"}}]}}
+{{"segments":[{{"type":"hook","voiceover":"洗澡出来台面全是水，脚底打滑太危险。"}}]}}
 
 type 顺序：{type_hint}"""
 
@@ -208,23 +210,41 @@ type 顺序：{type_hint}"""
 def build_shot_scene_prompt(voiceovers: list[str]) -> str:
     """根据分组后的口播文案生成双语场景描述（zh 给前端，en 给 Seedance）。"""
     items = "\n".join(f"镜{i+1}：{v}" for i, v in enumerate(voiceovers))
-    return f"""你是资深电商广告导演。根据每组口播文案，为 Seedance AI 视频生成工具撰写场景描述。
+    return f"""你是资深电商广告导演。根据每组口播文案，为 Seedance AI 视频生成工具撰写详尽场景描述。
 
 各组口播：
 {items}
 
 每个镜头同时输出中文版和英文版：
-- zh：给运营人员看的，通俗描述画面内容和运镜方式，30-50 字
-- en：给 Seedance 视频模型用的，40-80 个英文单词，必须包含 shot size / lens / camera movement / lighting / action
 
-━━━ 英文版要素 ━━━
-shot size / lens / camera movement / lighting / action
-必须是纯视觉描述，不要抽象形容词
+- zh：中文场景描述，50-80 字，包含：
+  画面构图（特写/中景/全景）、运镜方式、灯光氛围、产品与环境的互动细节。
+  示例："微距特写，镜头从杯口缓慢推入，暖色顶光勾勒不锈钢内胆的拉丝纹理，"
+         "蒸腾的水雾在逆光下呈现淡金色，背景虚化为柔和的厨房暖光。"
 
-━━━ 电商广告最佳实践 ━━━
-- 产品特写：极慢推镜 + 微距细节（材质纹理、logo 雕刻、接口做工）
-- 功能演示：固定机位 + 产品动作（开合、旋转、水流、冒蒸汽）
-- 场景展示：稳定环绕或滑轨 + 环境氛围（桌面上晨光洒落、厨房暖光）
+- en：英文 Seedance prompt，60-100 词，必须包含以下全部要素：
+  · shot size：extreme closeup / macro / medium shot / wide
+  · 焦段：85mm / 50mm / 35mm / 24mm
+  · camera movement：slow push-in / dolly right to left / crane up reveal / arc orbit
+  · lighting：key light 方位+色温、rim light、soft fill、practical light
+  · color palette：warm amber tones / cool teal shadows / golden hour / high contrast
+  · texture detail：材质纹理、反光、阴影、背景虚化程度
+  · action：产品正在发生的动作（水流、转动、光线变化、蒸汽升腾）
+
+  示例："Macro close-up on 85mm lens, slow push-in from cup rim traveling downward. "
+        "Warm key light at 45 degrees rakes across brushed stainless steel surface, "
+        "revealing fine circular polishing lines. Rim light from behind creates a "
+        "thin golden edge glow. Steam rises gently, catching backlight with soft "
+        "diffusion. Background dissolves into creamy bokeh of warm kitchen ambient."
+
+━━━ 拍摄手法指南 ━━━
+- 材质/做工展示：macro lens + extreme closeup + ultra-slow dolly push + rake light 打出纹理
+- 功能演示：medium shot + locked tripod + 产品在画面中心执行动作 + soft overhead key
+- 场景氛围：wide shot + slow arc orbit + 环境光影变化 + 浅景深分离产品与背景
+- 对比/测试：split screen or rack focus + dramatic top-down key + high speed detail
+
+禁止笼统描述，禁止 'beautiful' 'amazing' 'high quality' 等空洞词汇。
+每个镜头的描述必须有独一无二的画面细节，不能相互雷同。
 
 只输出 JSON：
 {{"scenes":[{{"zh":"中文描述","en":"English prompt"}}, ...]}}"""

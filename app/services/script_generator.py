@@ -60,7 +60,7 @@ class ScriptGenerator:
             seg["index"] = i
             parts.append(seg.get("voiceover", ""))
 
-        full_text = " ".join(parts)
+        full_text = "".join(parts)
         word_count = len(full_text.replace(" ", ""))
 
         return {
@@ -74,8 +74,6 @@ class ScriptGenerator:
     @staticmethod
     def _save(task_id: str, result: dict) -> str:
         """保存脚本 JSON 文件，返回路径。"""
-        task_dir = SCRIPTS_DIR / task_id
-        task_dir.mkdir(parents=True, exist_ok=True)
-        filepath = task_dir / "script.json"
+        filepath = SCRIPTS_DIR / task_id / "script.json"
         save_json(filepath, result)
         return str(filepath)
