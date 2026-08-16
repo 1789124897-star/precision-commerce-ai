@@ -12,7 +12,6 @@ class Video(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     task_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
-    product_id: Mapped[str] = mapped_column(String(32), nullable=True, index=True, default="")
     video_type: Mapped[str] = mapped_column(String(20), nullable=False)
     source_images: Mapped[str] = mapped_column(Text, default="")
     audio_path: Mapped[str] = mapped_column(String(500), default="")

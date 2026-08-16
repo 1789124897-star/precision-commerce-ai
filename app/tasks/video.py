@@ -13,10 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def _progress_callback(task_id: str):
-    """返回 on_progress(pct, stage) 回调 → 写入 MySQL 供前端轮询
-
-    内置节流：最多每秒写入一次，避免编码期间每帧都触发 DB 事务。
-    """
+    """返回 on_progress(pct, stage) 回调 → 节流写入 MySQL 供前端轮询"""
     import time
 
     _last_ts = [0.0]
@@ -28,33 +25,10 @@ def _progress_callback(task_id: str):
         _last_ts[0] = now
         try:
             with SyncSession() as db:
-                TaskRepo.set_result(
-                    db, task_id, {"progress": round(pct, 3), "stage": stage}
-                )
+                TaskRepo.set_result(db, task_id, {"progress": round(pct, 3), "stage": stage})
                 db.commit()
         except Exception:
             logger.exception("写入进度失败")
-
-    return on_progress
-
-
-def _shot_progress_callback(task_id: str):
-    """返回 on_progress(stage, detail) 回调，供 Seedance 分镜任务复用。"""
-    import time
-
-    _last_ts = [0.0]
-
-    def on_progress(stage: str, detail: str):
-        now = time.monotonic()
-        if now - _last_ts[0] < 1.0:
-            return
-        _last_ts[0] = now
-        try:
-            with SyncSession() as db:
-                TaskRepo.set_result(db, task_id, {"stage": stage, "detail": detail})
-                db.commit()
-        except Exception:
-            logger.exception("写入分镜进度失败")
 
     return on_progress
 
@@ -193,7 +167,8 @@ def generate_shot_task(self, task_id: str):
         db.commit()
 
     try:
-        clip_path = SeedanceService().generate_shot_sync(**request_json, on_progress=_shot_progress_callback(task_id))
+        cb = _progress_callback(task_id)
+        clip_path = SeedanceService().generate_shot_sync(**request_json, on_progress=lambda stage, detail: cb(0, f"{stage}: {detail}"))
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:

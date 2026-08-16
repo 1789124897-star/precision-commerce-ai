@@ -7,10 +7,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.celery_app import celery_app
-from app.core.database import SyncSession, get_db
-from app.models.task import STATUS_FAILURE, STATUS_SUCCESS, TASK_STATUSES, TASK_TYPES, Task
-from app.repositories.task_repo import AsyncTaskRepo, TaskRepo
+from app.core.database import get_db
+from app.models.task import TASK_STATUSES, TASK_TYPES, Task
+from app.repositories.task_repo import AsyncTaskRepo
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -107,26 +106,6 @@ async def export_tasks(
         media_type="text/csv; charset=utf-8-sig",
         headers={"Content-Disposition": "attachment; filename=tasks_export.csv"},
     )
-
-
-@router.post("/{task_id}/cancel")
-async def cancel_task(task_id: str) -> dict:
-    """取消任务：标记 FAILURE + 撤回 Celery 任务"""
-    with SyncSession() as db:
-        task = TaskRepo.get_by_id(db, task_id)
-        if not task:
-            return {"data": None, "message": "任务不存在"}
-        if task.status in (STATUS_SUCCESS, STATUS_FAILURE):
-            return {"data": None, "message": f"任务已结束 ({task.status})"}
-
-        # 撤回 Celery 任务（如果正在执行）
-        if task.celery_id:
-            celery_app.control.revoke(task.celery_id, terminate=True)
-
-        TaskRepo.set_failure(db, task_id, "用户手动取消")
-        db.commit()
-
-    return {"data": {"task_id": task_id, "status": STATUS_FAILURE}, "message": "已取消"}
 
 
 @router.get("/{task_id}")

@@ -7,7 +7,6 @@ import json
 import os
 import random
 import time
-from pathlib import Path
 
 from app.core.paths import OUTPUT_DIR
 
@@ -23,26 +22,6 @@ _MAX_AGE_HOURS = 12
 def random_delay(min_s=2.0, max_s=3.5):
     """随机等一小段时间，模拟人类操作间隔。"""
     time.sleep(random.uniform(min_s, max_s))
-
-
-# ═══════════════════════════════════════════════════════════════════
-# 容错层
-# ═══════════════════════════════════════════════════════════════════
-
-def retry(func, max_retries=3):
-    """重试包装器，指数退避：2s → 4s → 8s。"""
-    last_error = None
-    for attempt in range(1, max_retries + 1):
-        try:
-            return func()
-        except Exception as e:
-            last_error = e
-            print("第 " + str(attempt) + " 次失败: " + str(e))
-            if attempt < max_retries:
-                wait = 2 ** attempt
-                print("等 " + str(wait) + " 秒后重试...")
-                time.sleep(wait)
-    raise last_error
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -81,7 +60,7 @@ def load_cookies(page, cookie_file=None):
     path = cookie_file or _COOKIE_FILE
     if not has_valid_cookies(path):
         return False
-    with open(str(path), "r", encoding="utf-8") as f:
+    with open(str(path), encoding="utf-8") as f:
         cookies = json.load(f)
     for c in cookies:
         try:

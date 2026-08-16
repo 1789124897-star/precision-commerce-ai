@@ -4,7 +4,7 @@ import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -156,7 +156,7 @@ class SeedanceService:
         aspect_ratio: str = "9:16",
         duration_sec: float = 5.0,
         shot_index: int = 0,
-        on_progress: Optional[Callable] = None,
+        on_progress: Callable | None = None,
         generate_audio: bool = False,
         resolution: str = "720p",
     ) -> Path:
@@ -188,7 +188,7 @@ class SeedanceService:
         aspect_ratio: str = "9:16",
         duration_sec: float = 5.0,
         shot_index: int = 0,
-        on_progress: Optional[Callable] = None,
+        on_progress: Callable | None = None,
         generate_audio: bool = False,
         resolution: str = "720p",
     ) -> Path:
@@ -225,7 +225,7 @@ class SeedanceService:
         aspect_ratio: str = "9:16",
         duration_sec: float = 5.0,
         shot_index: int = 0,
-        on_progress: Optional[Callable] = None,
+        on_progress: Callable | None = None,
         generate_audio: bool = False,
         resolution: str = "720p",
     ) -> Path:

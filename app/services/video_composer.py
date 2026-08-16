@@ -8,7 +8,6 @@ import uuid
 from collections.abc import Callable
 from math import ceil
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from moviepy import (
@@ -23,11 +22,10 @@ from moviepy import (
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from proglog import ProgressBarLogger
 
-from app.core.paths import VIDEO_DIR, from_output_url
 from app.core.exceptions import AppException
+from app.core.paths import VIDEO_DIR, from_output_url
 from app.core.srt_utils import srt_to_seconds
 from app.services.seedance_service import SeedanceService
-
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +39,6 @@ FONT_PATH = next((p for p in _FONT_DIRS if p.exists()), None)
 
 class VideoComposer:
     """Ken Burns 风格视频合成器"""
-
-    # ── 共享工具 ──
-
-    def _report(self, pct: float, stage: str, on_progress=None):
-        """进度回调，compose / compose_premium 共用"""
-        if on_progress:
-            on_progress(pct, stage)
-        logger.info(f"[{pct*100:.0f}%] {stage}")
 
     @staticmethod
     def _make_encode_logger(encode_start: float, encode_end: float, on_progress=None):
@@ -74,7 +64,7 @@ class VideoComposer:
         resolution: str = "",
         transition: str = "fade",
         quality_check: bool = True,
-        on_progress: Optional[Callable[[float, str], None]] = None,
+        on_progress: Callable[[float, str], None] | None = None,
     ) -> dict:
         """快速模式：图片 + 音频 + 字幕 → MP4
 
@@ -83,16 +73,18 @@ class VideoComposer:
         """
         aspect_ratio = aspect_ratio or "9:16"
         resolution = resolution or "720p"
-        def report(p, s):
-            self._report(p, s, on_progress)
+        def report(pct, stage):
+            logger.info(f"[{pct*100:.0f}%] {stage}")
+            if on_progress:
+                on_progress(pct, stage)
 
         # 解析宽高比
         w, h = self._parse_aspect(aspect_ratio, resolution)
         report(0.0, f"加载 {len(images)} 张图片...")
 
         # 下载/加载图片
-        images = self._load_local_images(images)
-        if not images:
+        image_paths = self._load_local_images(images)
+        if not image_paths:
             raise AppException("没有可用的图片素材", 400)
 
         # 加载音频
@@ -104,14 +96,14 @@ class VideoComposer:
             has_audio = True
         else:
             # 无音频：每张图 2s
-            total_duration = len(images) * 2.0
+            total_duration = len(image_paths) * 2.0
             audio = None
             has_audio = False
-            logger.info(f"无音频，静音视频 · {len(images)} 张图 × 2s = {total_duration:.1f}s")
+            logger.info(f"无音频，静音视频 · {len(image_paths)} 张图 × 2s = {total_duration:.1f}s")
 
         # 每张图最多 6s，不够就循环
         MAX_PER_IMG = 6.0
-        candidate = total_duration / len(images)
+        candidate = total_duration / len(image_paths)
         if candidate > MAX_PER_IMG:
             # 图不够 → 循环
             per_img = MAX_PER_IMG
@@ -120,7 +112,7 @@ class VideoComposer:
             # 图够多 → 均分
             per_img = candidate
             loop_images = False
-        logger.info(f"音频 {total_duration:.1f}s, {len(images)} 张图, 每张 {per_img:.1f}s, 循环={loop_images}")
+        logger.info(f"音频 {total_duration:.1f}s, {len(image_paths)} 张图, 每张 {per_img:.1f}s, 循环={loop_images}")
 
         # 逐图生成 Ken Burns 动画
         report(0.1, f"生成动画 (每张 {per_img:.1f}s)...")
@@ -129,16 +121,16 @@ class VideoComposer:
         img_idx = 0
         while remaining > 0.1:
             clip_dur = min(per_img, remaining)
-            clip = self._ken_burns_clip(images[img_idx % len(images)], w, h, clip_dur)
+            clip = self._ken_burns_clip(image_paths[img_idx % len(image_paths)], w, h, clip_dur)
             if clips:
                 clip = self._apply_transition(clip, transition)
             clips.append(clip)
             remaining -= clip_dur
             img_idx += 1
             if loop_images:
-                report(0.1 + 0.6 * remaining / total_duration, f"动画 {img_idx} (循环第 {img_idx//len(images)+1} 轮)")
+                report(0.1 + 0.6 * remaining / total_duration, f"动画 {img_idx} (循环第 {img_idx//len(image_paths)+1} 轮)")
             else:
-                report(0.1 + 0.6 * (1 - remaining / total_duration), f"动画 {img_idx}/{len(images)}")
+                report(0.1 + 0.6 * (1 - remaining / total_duration), f"动画 {img_idx}/{len(image_paths)}")
 
         # 拼接视频
         report(0.7, "拼接音画...")
@@ -422,7 +414,7 @@ class VideoComposer:
         logger.warning("未找到中文字体，使用默认字体（中文可能不显示）")
         return ImageFont.load_default()
 
-    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int, shadow: int = 2) -> Optional[Image.Image]:
+    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int, shadow: int = 2) -> Image.Image | None:
         """字幕渲染：白字黑边，无背景条"""
         margin = int(max_w * 0.04)  # 左右留白 4%
         lines = []
@@ -468,14 +460,16 @@ class VideoComposer:
         aspect_ratio: str = "",
         resolution: str = "",
         generate_audio: bool = False,
-        on_progress: Optional[Callable[[float, str], None]] = None,
-        segment_durations: Optional[list[float]] = None,  # noqa: ARG002
+        on_progress: Callable[[float, str], None] | None = None,
+        segment_durations: list[float] | None = None,  # noqa: ARG002
     ) -> dict:
         """精品模式：按分镜列表逐镜生成视频"""
         aspect_ratio = aspect_ratio or "9:16"
         resolution = resolution or "720p"
-        def report(p, s):
-            self._report(p, s, on_progress)
+        def report(pct, stage):
+            logger.info(f"[{pct*100:.0f}%] {stage}")
+            if on_progress:
+                on_progress(pct, stage)
 
         w, h = self._parse_aspect(aspect_ratio, resolution)
 

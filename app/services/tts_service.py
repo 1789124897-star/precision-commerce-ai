@@ -6,14 +6,14 @@ import logging
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import edge_tts
 from aiohttp import ClientError
 from edge_tts.exceptions import EdgeTTSException
 
-from app.core.paths import AUDIO_DIR, to_output_url
 from app.core.exceptions import AppException
+from app.core.paths import AUDIO_DIR, to_output_url
 from app.core.srt_utils import seconds_to_srt
 from app.services.ai_client import AIClient
 from app.services.shot_grouper import ShotGroup, ShotGrouper
@@ -80,7 +80,7 @@ class _SubtitleChunk:
     start_tick: int
     end_tick: int
     text: str
-    break_char: Optional[str] = None
+    break_char: str | None = None
 
 
 class TTSEngine:
@@ -185,8 +185,8 @@ async def _synthesize_with_words(
                     audio_bytes.extend(chunk["data"])
                 elif chunk["type"] == "SentenceBoundary":
                     boundaries.append(SentenceBoundary(
-                        offset=chunk["offset"],
-                        duration=chunk["duration"],
+                        offset=int(chunk["offset"]),
+                        duration=int(chunk["duration"]),
                         text=chunk["text"],
                     ))
 
@@ -293,7 +293,7 @@ def _build_srt(words: list[TimedWord], output_path: Path) -> tuple[list[str], li
     return texts, durations
 
 
-def _flush_chunk(buf_words: list[TimedWord], break_char: Optional[str]) -> _SubtitleChunk:
+def _flush_chunk(buf_words: list[TimedWord], break_char: str | None) -> _SubtitleChunk:
     """缓冲区字戳压成一条字幕片段，去标点，记录触发标点类型。"""
     start = buf_words[0].start_tick
     last = buf_words[-1]

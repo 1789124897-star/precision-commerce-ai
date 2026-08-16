@@ -1,9 +1,10 @@
 """共享 HTTP 客户端——带退避重试的 POST 请求，所有 LLM 提供者复用。"""
 import asyncio
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
+
 from app.core.exceptions import AppException
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ async def post_with_retry(
             async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
                 resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
-                return resp.json()
+                return cast("dict[str, Any]", resp.json())
         except (
             httpx.ConnectTimeout,
             httpx.ReadTimeout,

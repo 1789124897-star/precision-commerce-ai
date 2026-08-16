@@ -3,8 +3,8 @@ import asyncio
 import logging
 from typing import Any
 
-from app.core.paths import SCRIPTS_DIR
 from app.core.exceptions import AppException
+from app.core.paths import SCRIPTS_DIR
 from app.core.utils import save_json
 from app.services.ai_client import AIClient
 from app.services.prompts import build_product_script_prompt

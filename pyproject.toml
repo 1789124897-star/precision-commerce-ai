@@ -1,6 +1,6 @@
 [tool.ruff]
 # 排除不需要检查的目录
-exclude = ["__pycache__", ".venv", "venv", "logs", "output", "migrations"]
+exclude = ["__pycache__", ".venv", "venv", "logs", "output", "migrations", "alembic"]
 line-length = 120
 target-version = "py310"
 

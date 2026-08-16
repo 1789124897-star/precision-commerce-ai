@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # 火山方舟 — 多模态分析
-    VOLCANO_API_KEY: str
+    VOLCANO_API_KEY: str = ""
     DOUBAO_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
-    DOUBAO_MODEL: str
+    DOUBAO_MODEL: str = ""
 
     # LLM Provider 切换
     TEXT_PROVIDER: str = "deepseek"
@@ -26,11 +26,11 @@ class Settings(BaseSettings):
     # DeepSeek — 纯文本策略
     DEEPSEEK_MODEL: str = "deepseek-v4-pro"
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1/chat/completions"
-    DEEPSEEK_API_KEY: str
+    DEEPSEEK_API_KEY: str = ""
 
     # Seedream 生图
-    SEEDREAM_IMAGE_URL: str
-    SEEDREAM_IMAGE_MODEL: str
+    SEEDREAM_IMAGE_URL: str = ""
+    SEEDREAM_IMAGE_MODEL: str = ""
     IMAGE_MAX_CONCURRENT: int = 3
 
     # Seedance 图生视频

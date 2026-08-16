@@ -3,6 +3,7 @@ import logging
 
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
+from app.models.task import STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
 from app.services.tts_service import TTSEngine
 
@@ -47,4 +48,4 @@ def generate_tts_task(self, task_id: str):
         db.commit()
 
     logger.info("完成 task_id=%s", task_id)
-    return {"task_id": task_id, "status": "SUCCESS"}
+    return {"task_id": task_id, "status": STATUS_SUCCESS}

@@ -26,9 +26,10 @@ async def lifespan(app: FastAPI):
     command.upgrade(alembic_cfg, "head")
 
     # 启动时清理上次遗留的 RUNNING 状态（Worker 重启导致）
+    from sqlalchemy import update
+
     from app.core.database import SyncSession
     from app.models.task import STATUS_FAILURE, Task
-    from sqlalchemy import update
     with SyncSession() as db:
         db.execute(
             update(Task).where(Task.status == "RUNNING").values(

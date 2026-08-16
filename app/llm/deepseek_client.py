@@ -3,7 +3,7 @@
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from app.core.config import settings
 from app.core.exceptions import AppException
@@ -55,9 +55,7 @@ class DeepSeekClient(BaseLLMClient):
         }
         t0 = time.monotonic()
         logger.info("DeepSeek JSON 请求开始 model=%s", self._model)
-        data = await post_with_retry(
-            self._base_url, payload, headers=self._headers, timeout=120.0,
-        )
+        data = await post_with_retry(self._base_url, payload, headers=self._headers, timeout=120.0)
         elapsed = time.monotonic() - t0
         logger.info("DeepSeek JSON 请求完成 耗时=%.1fs", elapsed)
         content = data["choices"][0]["message"].get("content", "")
@@ -68,4 +66,4 @@ class DeepSeekClient(BaseLLMClient):
             if finish_reason == "content_filter":
                 raise AppException("内容被安全策略拦截，请修改 prompt 后重试", 502)
             raise AppException(f"DeepSeek JSON Output 返回空内容（已知问题，finish_reason={finish_reason}），请重试", 502)
-        return json.loads(content)
+        return cast("dict[str, Any]", json.loads(content))

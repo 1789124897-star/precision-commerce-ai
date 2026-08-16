@@ -54,7 +54,8 @@ services:
       redis:
         condition: service_healthy
     environment:
-      - DATABASE_URL=mysql+pymysql://user:pass@db:3306/ecommerce
+      # database.py 会自动将 aiomysql 驱动替换为 pymysql 供 SyncSession 使用
+      - DATABASE_URL=mysql+aiomysql://user:pass@db:3306/ecommerce
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env

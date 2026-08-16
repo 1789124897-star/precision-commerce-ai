@@ -4,13 +4,13 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
 from app.core.config import settings
-from app.core.paths import IMAGE_DIR
 from app.core.exceptions import AppException
+from app.core.paths import IMAGE_DIR
 from app.core.utils import image_to_data_url
 from app.services.ai_client import AIClient
 
@@ -28,7 +28,7 @@ class ImageGenService:
         task_id: str = "",
         prompts: str = "",
         size: str = "",
-        ref_image_paths: Optional[list[str]] = None,
+        ref_image_paths: list[str] | None = None,
     ) -> dict:
         size = size or "2048x2048"
         if not settings.SEEDREAM_IMAGE_URL or not settings.SEEDREAM_IMAGE_MODEL:
@@ -47,7 +47,7 @@ class ImageGenService:
             ref_image_data_urls=ref_data_urls,
             size=size,
         )
-        all_images = await _build_image_entries(results, "", output_dir, task_id, timestamp)
+        all_images = await _build_image_entries(results, output_dir, task_id, timestamp)
 
         success_count = sum(1 for r in results if r.get("url"))
         if success_count == 0:
@@ -77,7 +77,6 @@ async def _download_image(url: str, output_dir: Path, filename: str) -> Path:
 
 async def _build_image_entries(
     results: list[dict[str, Any]],
-    prefix: str,
     output_dir: Path,
     task_id: str,
     timestamp: str,
@@ -85,10 +84,10 @@ async def _build_image_entries(
     """将生图结果 + 下载组装为统一条目列表"""
     entries = []
     for r in results:
-        src = r.get("source", prefix or "img")
+        src = r.get("source", "img")
         img_info = {
             "position": r["position"],
-            "type": r.get("type", prefix),
+            "type": r.get("type", ""),
             "prompt": r["prompt"],
             "local_path": "",
             "remote_url": r.get("url", ""),
