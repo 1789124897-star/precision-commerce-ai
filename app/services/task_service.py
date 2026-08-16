@@ -1,7 +1,7 @@
 """Task 创建与下发。"""
 import hashlib
 import json
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +26,7 @@ class TaskService:
         task_type: str,
         request_json: dict[str, Any],
         celery_task: Any,
-        parent_task_id: str | None = None,
+        parent_task_id: Optional[str] = None,
     ) -> Task:
 
         request_hash = _make_request_hash(request_json)

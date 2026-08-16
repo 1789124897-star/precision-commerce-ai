@@ -4,6 +4,7 @@ import re
 import shutil
 import time
 from pathlib import Path
+from typing import Optional
 
 import requests
 import yaml
@@ -243,7 +244,7 @@ class ImageScraper:
             return False
 
     @staticmethod
-    def _extract_bg_url(style: str | None) -> str | None:
+    def _extract_bg_url(style: Optional[str]) -> Optional[str]:
         """从 CSS background-image 中提取 URL。"""
         if not style:
             return None

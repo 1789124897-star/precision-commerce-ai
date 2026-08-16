@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
@@ -103,7 +103,7 @@ class AIClient:
         self,
         *,
         specs: list[dict[str, Any]],
-        ref_image_data_urls: list[str] | None = None,
+        ref_image_data_urls: Optional[list[str]] = None,
         size: str = "2048x2048",
     ) -> list[dict[str, Any]]:
 

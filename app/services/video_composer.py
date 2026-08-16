@@ -8,6 +8,7 @@ import uuid
 from collections.abc import Callable
 from math import ceil
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from moviepy import (
@@ -64,7 +65,7 @@ class VideoComposer:
         resolution: str = "",
         transition: str = "fade",
         quality_check: bool = True,
-        on_progress: Callable[[float, str], None] | None = None,
+        on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> dict:
         """快速模式：图片 + 音频 + 字幕 → MP4
 
@@ -414,7 +415,7 @@ class VideoComposer:
         logger.warning("未找到中文字体，使用默认字体（中文可能不显示）")
         return ImageFont.load_default()
 
-    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int, shadow: int = 2) -> Image.Image | None:
+    def _render_text_image(self, text: str, font: ImageFont.FreeTypeFont, max_w: int, shadow: int = 2) -> Optional[Image.Image]:
         """字幕渲染：白字黑边，无背景条"""
         margin = int(max_w * 0.04)  # 左右留白 4%
         lines = []
@@ -460,8 +461,8 @@ class VideoComposer:
         aspect_ratio: str = "",
         resolution: str = "",
         generate_audio: bool = False,
-        on_progress: Callable[[float, str], None] | None = None,
-        segment_durations: list[float] | None = None,  # noqa: ARG002
+        on_progress: Optional[Callable[[float, str], None]] = None,
+        segment_durations: Optional[list[float]] = None,  # noqa: ARG002
     ) -> dict:
         """精品模式：按分镜列表逐镜生成视频"""
         aspect_ratio = aspect_ratio or "9:16"

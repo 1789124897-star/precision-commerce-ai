@@ -6,7 +6,7 @@ import logging
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import edge_tts
 from aiohttp import ClientError
@@ -80,7 +80,7 @@ class _SubtitleChunk:
     start_tick: int
     end_tick: int
     text: str
-    break_char: str | None = None
+    break_char: Optional[str] = None
 
 
 class TTSEngine:
@@ -293,7 +293,7 @@ def _build_srt(words: list[TimedWord], output_path: Path) -> tuple[list[str], li
     return texts, durations
 
 
-def _flush_chunk(buf_words: list[TimedWord], break_char: str | None) -> _SubtitleChunk:
+def _flush_chunk(buf_words: list[TimedWord], break_char: Optional[str]) -> _SubtitleChunk:
     """缓冲区字戳压成一条字幕片段，去标点，记录触发标点类型。"""
     start = buf_words[0].start_tick
     last = buf_words[-1]

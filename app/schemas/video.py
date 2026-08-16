@@ -1,5 +1,7 @@
 ﻿""" Video Pydantic 模型 """
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -13,7 +15,7 @@ class GenerateTTSRequest(BaseModel):
     text: str = Field(..., min_length=1)
     voice: str = ""
     rate: str = ""
-    parent_task_id: str | None = None  
+    parent_task_id: Optional[str] = None  
 
 
 
@@ -25,7 +27,7 @@ class ComposeVideoRequest(BaseModel):
     resolution: str = "720p"
     transition: str = "fade"
     quality_check: bool = True
-    parent_task_id: str | None = None  
+    parent_task_id: Optional[str] = None  
 
 
 class ShotSchema(BaseModel):
@@ -49,8 +51,8 @@ class ComposePremiumRequest(BaseModel):
     aspect_ratio: str = "9:16"
     generate_audio: bool = False
     resolution: str = "720p"
-    segment_durations: list[float] | None = None
-    parent_task_id: str | None = None  # 上游 TTS 任务
+    segment_durations: Optional[list[float]] = None
+    parent_task_id: Optional[str] = None  # 上游 TTS 任务
 
 
 class GenerateShotRequest(BaseModel):
@@ -64,4 +66,4 @@ class GenerateShotRequest(BaseModel):
     generate_audio: bool = False
     resolution: str = "720p"
     shot_index: int = 0
-    parent_task_id: str | None = None  # 上游 TTS 任务
+    parent_task_id: Optional[str] = None  # 上游 TTS 任务

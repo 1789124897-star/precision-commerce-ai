@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
@@ -28,7 +28,7 @@ class ImageGenService:
         task_id: str = "",
         prompts: str = "",
         size: str = "",
-        ref_image_paths: list[str] | None = None,
+        ref_image_paths: Optional[list[str]] = None,
     ) -> dict:
         size = size or "2048x2048"
         if not settings.SEEDREAM_IMAGE_URL or not settings.SEEDREAM_IMAGE_MODEL:
