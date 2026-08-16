@@ -9,7 +9,7 @@
             (多模态 LLM)  (三路并发)    (Seedream 4.5)
 
 文本输入 ──▶ 脚本生成 ──▶ TTS 合成 ──▶ 视频合成
-            (透传模式)    (edge-tts)   (MoviePy / Seedance)
+            (LLM 结构化) (edge-tts)  (MoviePy / Seedance)
 ```
 
 ### 各模块详解
@@ -76,7 +76,7 @@ Docker Compose · Celery Flower · Celery Beat
 
 | 变量 | 说明 |
 |------|------|
-| `TEXT_API_KEY` | 文本分析 / 脚本生成（DeepSeek） |
+| `DEEPSEEK_API_KEY` | 文本分析 / 脚本生成（DeepSeek） |
 | `VOLCANO_API_KEY` | 火山方舟（Seedream + Seedance + 豆包多模态） |
 | `DATABASE_URL` | MySQL 连接串 |
 | `REDIS_URL` | Celery broker |
@@ -102,8 +102,9 @@ app/
 ├── schemas/           Pydantic 请求/响应模型
 ├── core/              基础设施（配置/数据库/Celery/路径/日志）
 ├── repositories/      数据访问封装
+├── config/            爬虫站点配置（YAML）
 └── llm/               LLM 客户端（DeepSeek + 豆包）
 static/                前端页面（index.html）
-logs/                  四层分离日志（app/error/task）
+logs/                  三层文件日志 + 控制台（app/error/task）
 output/                产物目录（图片/音频/视频）
 ```
