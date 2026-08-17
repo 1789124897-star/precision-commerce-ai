@@ -16,14 +16,14 @@
 
 | 模块 | 路由 | 功能说明 |
 |------|------|---------|
-| **数据采集** | `POST /scraper/scrape`                     | 输入 URL，自动提取页面上的图片和文本，存入数据库               |
-| **深度分析** | `POST /analysis/submit`                    | 对采集到的文本和图片做多模态 AI 分析，输出结构化结论           |
-| **策略生成** | `POST /analysis/strategies`                | 基于分析结果，生成多角度的营销策略，三路并发入库               |
-| **AI 生图** | `POST /images/generate`                     | 将策略文案转化为图片生成指令，调用 Seedream 4.5 出图           |
-| **脚本生成** | `POST /video/generate-script`              | 将文本转为口播脚本，LLM 结构化输出，不做代码层修补             |
-| **TTS 合成** | `POST /video/generate-tts`                 | 将脚本文本合成为语音文件，同时输出逐字对齐的字幕文件           |
-| **视频合成** | `POST /video/compose` / `POST /video/compose-premium` | 将图片/视频素材 + 音频 + 字幕合成为成品视频         |
-| **任务追踪** | `GET /tasks/{task_id}`                     | 前端轮询查询异步任务进度，任务完成后自动返回结果               |
+| **数据采集** | `POST /api/v1/scraper/scrape`            | 输入 URL，自动提取页面上的图片和文本，存入数据库               |
+| **深度分析** | `POST /api/v1/analysis/submit`           | 对采集到的文本和图片做多模态 AI 分析，输出结构化结论           |
+| **策略生成** | `POST /api/v1/analysis/strategies`       | 基于分析结果，生成多角度的营销策略，三路并发入库               |
+| **AI 生图** | `POST /api/v1/images/generate`            | 将策略文案转化为图片生成指令，调用 Seedream 4.5 出图           |
+| **脚本生成** | `POST /api/v1/video/generate-script`     | 将文本转为口播脚本，LLM 直接输出 JSON，代码层只做段数对齐      |
+| **TTS 合成** | `POST /api/v1/video/generate-tts`        | 将脚本文本合成为语音文件，同时输出逐字对齐的字幕文件           |
+| **视频合成** | `POST /api/v1/video/compose` / `POST /api/v1/video/compose-premium` | 将图片/视频素材 + 音频 + 字幕合成为成品视频         |
+| **任务追踪** | `GET /api/v1/tasks/{task_id}`            | 前端轮询查询异步任务进度，任务完成后自动返回结果               |
 
 ## 架构设计
 
@@ -36,7 +36,7 @@ Service 层 ── 业务逻辑编排，调用外部 AI 接口，与框架层、
   │
 Repository 层 ── 数据访问封装，只暴露必要查询
   │
-Model 层 ── SQLAlchemy 2.0 Mapped，Base.metadata.create_all 自动建表
+Model 层 ── SQLAlchemy 2.0 Mapped，Alembic 管理表结构，启动时自动升级
 ```
 
 ### 异步任务管线
@@ -56,7 +56,7 @@ Model 层 ── SQLAlchemy 2.0 Mapped，Base.metadata.create_all 自动建表
 |---|--------|---------|
 | `tasks` | 所有异步任务 | 统一生命周期追踪，`result_json` 做任务快照 |
 | `products` | 采集数据 | `product_id` 索引，串联分析 & 视频的关联关系 |
-| `analyses` | 每次分析 1 行 | 输入字段可查询（品类/价格），输出全文存 TEXT |
+| `analyses` | 每次分析 1 行 | 输入字段可查询（商品名/价格区间），输出全文存 TEXT |
 | `strategies` | 每次分析 3 行 | A/B/C 独立行，`analysis_task_id` FK 维持血缘 |
 | `videos` | 每次合成 1 行 | 交付物追踪（素材/输出路径/时长/分辨率） |
 
@@ -80,6 +80,8 @@ Docker Compose · Celery Flower · Celery Beat
 | `VOLCANO_API_KEY` | 火山方舟（Seedream + Seedance + 豆包多模态） |
 | `DATABASE_URL` | MySQL 连接串 |
 | `REDIS_URL` | Celery broker |
+| `PROXY_PROVIDER` | 爬虫代理源：none / free / brightdata |
+| `ALIBABA_1688_EMAIL/PASSWORD` | 1688 账号（Cookie 持久化，应对登录墙） |
 
 ```bash
 cp .env.example .env          # 填入 API Key
