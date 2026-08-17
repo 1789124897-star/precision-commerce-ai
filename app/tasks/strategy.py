@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 @celery_app.task(
     bind=True,
     name="generate_strategies",
-    priority=7,
     soft_time_limit=300,
     time_limit=420,
     autoretry_for=(Exception,),

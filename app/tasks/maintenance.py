@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(
     name="cleanup_stale_tasks",
-    priority=1,
     soft_time_limit=120,
     time_limit=180,
 )

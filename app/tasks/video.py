@@ -36,7 +36,6 @@ def _progress_callback(task_id: str):
 @celery_app.task(
     bind=True,
     name="compose_video",
-    priority=3,
     soft_time_limit=600,
     time_limit=900,
     autoretry_for=(Exception,),
@@ -90,7 +89,6 @@ def compose_video_task(self, task_id: str):
 @celery_app.task(
     bind=True,
     name="compose_premium_video",
-    priority=3,
     soft_time_limit=600,
     time_limit=900,
     autoretry_for=(Exception,),
@@ -145,7 +143,6 @@ def compose_premium_video_task(self, task_id: str):
 @celery_app.task(
     bind=True,
     name="generate_shot",
-    priority=3,
     soft_time_limit=300,
     time_limit=420,
     autoretry_for=(Exception,),

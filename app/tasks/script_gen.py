@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 @celery_app.task(
     bind=True,
     name="generate_script",
-    priority=9,
     soft_time_limit=180,
     time_limit=240,
     autoretry_for=(Exception,),

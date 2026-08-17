@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 @celery_app.task(
     bind=True,
     name="scrape_product",
-    priority=5,
     soft_time_limit=300,
     time_limit=420,
     autoretry_for=(Exception,),
