@@ -18,13 +18,20 @@ async def post_with_retry(
     timeout: float = 180.0,
     max_retries: int = 3,
     proxy: Optional[str] = None,
+    files: Optional[list[Any]] = None,
 ) -> dict[str, Any]:
-    """POST 请求，网络瞬态错误指数退避重试。"""
+    """POST 请求，网络瞬态错误指数退避重试。files 非空时走 multipart/form-data。"""
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(timeout=timeout, trust_env=False, proxy=proxy, follow_redirects=True) as client:
-                resp = await client.post(url, headers=headers, json=payload)
-                resp.raise_for_status()
+                if files:
+                    resp = await client.post(url, headers=headers, data=payload, files=files)
+                else:
+                    resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code >= 500 or resp.status_code == 429:
+                    resp.raise_for_status()  
+                if resp.status_code >= 400:
+                    raise AppException(f"API 返回 {resp.status_code}: {resp.text[:200]}", resp.status_code)
                 return cast("dict[str, Any]", resp.json())
         except (
             httpx.ConnectTimeout,

@@ -159,7 +159,7 @@
         <div id="igRefPreview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>
       </div>
 
-      <!-- 尺寸和生成按钮 -->
+      <!-- 尺寸、模型和生成按钮 -->
       <div style="display:flex;gap:10px;align-items:flex-end;">
         <div style="flex:1;">
           <label>输出尺寸</label>
@@ -168,6 +168,13 @@
             <option value="2560x1440">2560×1440（横屏 16:9）</option>
             <option value="1440x2560">1440×2560（竖屏 9:16）</option>
             <option value="1920x1920">1920×1920（正方形最小）</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <label>生图模型</label>
+          <select id="igModel" style="width:100%;height:42px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--bg);">
+            <option value="gpt-image-2">GPT Image 2.0（默认）</option>
+            <option value="doubao-seedream-4-5-251128">Seedream 4.5</option>
           </select>
         </div>
         <button class="btn btn-primary" style="height:42px;padding:0 24px;flex:none;width:auto;" onclick="doImageGen()" id="btnImageGen">🖼️ 生成</button>
@@ -365,6 +372,18 @@
     </div>
   </div>
 
+</div>
+
+<!-- ════════ 图片素材侧边栏 ════════ -->
+<button class="img-bank-toggle" id="imgBankToggle" onclick="toggleImageBank()" title="图片素材库">图库</button>
+<div class="img-bank-sidebar" id="imgBankSidebar">
+  <div class="img-bank-header">
+    <div><span class="title">🖼️ 素材图库</span><span class="count" id="imgBankCount">(0)</span></div>
+    <div style="display:flex;gap:4px;">
+      <button class="img-bank-close" onclick="toggleImageBank()">×</button>
+    </div>
+  </div>
+  <div class="img-bank-list" id="imgBankList"></div>
 </div>
 
 <!-- ====== LIGHTBOX ====== -->

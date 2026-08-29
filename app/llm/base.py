@@ -33,3 +33,18 @@ class BaseMultimodalClient(ABC):
     ) -> str:
         """传入图片 data URL + 提示词，返回分析文本。"""
         ...
+
+
+class BaseImageClient(ABC):
+    """生图客户端"""
+
+    @abstractmethod
+    async def generate_image(
+        self,
+        *,
+        prompt: str,
+        size: str,
+        ref_image_data_urls: list[str],
+    ) -> str:
+        """单张生图。"""
+        ...

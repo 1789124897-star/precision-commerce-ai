@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     SEEDREAM_IMAGE_MODEL: str = ""
     IMAGE_MAX_CONCURRENT: int = 3
 
+    # GPT 生图（OpenAI 兼容）
+    GPT_IMAGE_URL: str = "https://api.sudocode.chat/v1/images/generations"
+    GPT_IMAGE_MODEL: str = "gpt-image-2"
+
     # Seedance 图生视频
     SEEDANCE_VIDEO_URL: str = "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks"
     SEEDANCE_VIDEO_MODEL: str = "doubao-seedance-1-5-pro-251215"

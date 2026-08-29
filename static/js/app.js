@@ -1511,6 +1511,7 @@ async function doImageGen() {
   if (!prompts.length) { showS('igStatus', 'error', '请先输入至少一条提示词'); return; }
 
   const size = document.getElementById('igSize').value;
+  const model = document.getElementById('igModel').value.trim() || 'gpt-image-2';
   const btn = document.getElementById('btnImageGen');
   btn.disabled = true; btn.textContent = '⏳ 生成中...';
   showS('igStatus', 'info', `正在生成 ${prompts.length} 张图片...`);
@@ -1519,8 +1520,9 @@ async function doImageGen() {
   const specs = prompts.map((p, i) => ({position: i + 1, prompt: p, source: "", type: "standalone"}));
   fd.append('prompts', JSON.stringify(specs));
   fd.append('size', size);
+  fd.append('model', model);
   for (const f of igRefFiles) fd.append('ref_images', f);
-  console.log('[AI生图] 提交参考图数量:', igRefFiles.length);
+  console.log('[AI生图] model:', model, '参考图数量:', igRefFiles.length);
 
   try {
     const res = await fetch('/api/v1/images/generate', { method: 'POST', body: fd });

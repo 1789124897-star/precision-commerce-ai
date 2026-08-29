@@ -1,7 +1,7 @@
 """LLM 客户端工厂"""
 
 from app.core.config import settings
-from app.llm.base import BaseLLMClient, BaseMultimodalClient
+from app.llm.base import BaseImageClient, BaseLLMClient, BaseMultimodalClient
 
 
 def create_text_client() -> BaseLLMClient:
@@ -32,3 +32,13 @@ def create_multimodal_client() -> BaseMultimodalClient:
         return GptClient()
 
     raise ValueError(f"不支持的 MULTIMODAL_PROVIDER: {provider}，可选: doubao / kimi / gpt")
+
+
+def create_image_client(model: str) -> BaseImageClient:
+    """按模型名选择生图客户端：gpt- 前缀走 GPT，其余走 Seedream。"""
+    if model.startswith("gpt-"):
+        from app.llm.gpt_image_client import GptImageClient
+        return GptImageClient(model=model)
+
+    from app.llm.seedream_image_client import SeedreamImageClient
+    return SeedreamImageClient(model=model)

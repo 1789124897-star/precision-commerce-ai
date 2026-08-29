@@ -15,6 +15,7 @@ async def submit_image(
     prompts: str = Form(...),
     ref_images: list[UploadFile] = File(default_factory=list),
     size: str = Form("2048x2048"),
+    model: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     ref_image_paths = [save_upload(f, "image_gen") for f in ref_images if f]
@@ -26,6 +27,7 @@ async def submit_image(
             "prompts": prompts,
             "ref_image_paths": ref_image_paths,
             "size": size,
+            "model": model,
         },
         celery_task=generate_images_task,
     )

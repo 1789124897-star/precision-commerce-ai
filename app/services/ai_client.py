@@ -4,12 +4,10 @@ import asyncio
 import logging
 from typing import Any, Optional
 
-import httpx
-
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.llm.base import BaseLLMClient, BaseMultimodalClient
-from app.llm.factory import create_multimodal_client, create_text_client
+from app.llm.factory import create_image_client, create_multimodal_client, create_text_client
 
 logger = logging.getLogger(__name__)
 
@@ -105,10 +103,12 @@ class AIClient:
         specs: list[dict[str, Any]],
         ref_image_data_urls: Optional[list[str]] = None,
         size: str = "2048x2048",
+        model: str = "",
     ) -> list[dict[str, Any]]:
 
-        """并发生图，Semaphore 限流。"""
+        """并发生图，Semaphore 限流，按模型走 factory 客户端。"""
         semaphore = asyncio.Semaphore(settings.IMAGE_MAX_CONCURRENT)
+        image_client = create_image_client(model or settings.GPT_IMAGE_MODEL)
 
         def _result(index: int, spec: dict[str, Any], url: str = "", error: str = "",) -> dict[str, Any]:
             return {
@@ -127,42 +127,15 @@ class AIClient:
                     return _result(index, spec, error="prompt is empty")
                 img_size = ("1440x2560" if spec.get("source") == "detail" else size)
                 try:
-                    payload: dict[str, Any] = {
-                        "model": settings.SEEDREAM_IMAGE_MODEL,
-                        "prompt": prompt,
-                        "size": img_size,
-                        "response_format": "url",
-                        "stream": False,
-                        "watermark": False,
-                    }
-                    if ref_image_data_urls:
-                        payload["image"] = ref_image_data_urls
-                        payload["sequential_image_generation"] = "disabled"
-                    logger.info(
-                        "生图请求: model=%s, size=%s, prompt_len=%d, ref_images=%d",
-                        payload["model"],
-                        payload["size"],
-                        len(prompt),
-                        len(ref_image_data_urls) if ref_image_data_urls else 0,
+                    url = await image_client.generate_image(
+                        prompt=prompt,
+                        size=img_size,
+                        ref_image_data_urls=ref_image_data_urls or [],
                     )
-                    from app.llm.http import post_with_retry
-
-                    data = await post_with_retry(
-                        settings.SEEDREAM_IMAGE_URL,
-                        payload,
-                        headers={
-                            "Authorization": f"Bearer {settings.VOLCANO_API_KEY}",
-                            "Content-Type": "application/json",
-                        },
-                    )
-                    return _result(index, spec, url=data["data"][0]["url"])
-                except httpx.HTTPStatusError as e:
-                    logger.error(
-                        "生图 API 返回错误: %d %s",
-                        e.response.status_code,
-                        e.response.text[:500],
-                    )
-                    return _result(index, spec, error=str(e))
+                    return _result(index, spec, url=url)
+                except AppException as e:
+                    logger.error("生图失败 spec=%s: %s", spec, e.message)
+                    return _result(index, spec, error=e.message)
                 except Exception:
                     logger.exception("生图未预期异常, spec=%s", spec)
                     return _result(index, spec, error="internal error")
