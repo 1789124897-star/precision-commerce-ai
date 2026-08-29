@@ -3,6 +3,7 @@ import logging
 
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
+from app.core.exceptions import AppException
 from app.models.task import STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
 from app.services.tts_service import TTSEngine
@@ -35,6 +36,12 @@ def generate_tts_task(self, task_id: str):
 
     try:
         result = TTSEngine().run_sync(**request_json, task_id=task_id)
+    except AppException as e:
+        logger.error("业务失败 task_id=%s: %s", task_id, e.message)
+        with SyncSession() as db:
+            TaskRepo.set_failure(db, task_id, e.message)
+            db.commit()
+        return {"task_id": task_id, "status": "FAILURE"}
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:

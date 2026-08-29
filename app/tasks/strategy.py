@@ -3,6 +3,7 @@ import logging
 
 from app.core.celery_app import celery_app
 from app.core.database import SyncSession
+from app.core.exceptions import AppException
 from app.models import Strategy
 from app.models.task import STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
@@ -37,7 +38,15 @@ def generate_strategies_task(self, task_id: str):
 
     try:
         result = AnalysisService().run_strategies_sync(**request_json)
+    except AppException as e:
+        # 业务/永久性错误：重试无意义，标记失败后直接结束
+        logger.error("业务失败 task_id=%s: %s", task_id, e.message)
+        with SyncSession() as db:
+            TaskRepo.set_failure(db, task_id, e.message)
+            db.commit()
+        return {"task_id": task_id, "status": "FAILURE"}
     except Exception as e:
+        # 临时性错误（网络/接口抖动）：标记失败 + raise 触发自动重试
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:
             TaskRepo.set_failure(db, task_id, str(e))
