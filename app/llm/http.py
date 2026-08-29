@@ -1,7 +1,7 @@
 """共享 HTTP 客户端——带退避重试的 POST 请求，所有 LLM 提供者复用。"""
 import asyncio
 import logging
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 import httpx
 
@@ -17,11 +17,12 @@ async def post_with_retry(
     headers: dict[str, str],
     timeout: float = 180.0,
     max_retries: int = 3,
+    proxy: Optional[str] = None,
 ) -> dict[str, Any]:
     """POST 请求，网络瞬态错误指数退避重试。"""
     for attempt in range(max_retries):
         try:
-            async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
+            async with httpx.AsyncClient(timeout=timeout, trust_env=False, proxy=proxy, follow_redirects=True) as client:
                 resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 return cast("dict[str, Any]", resp.json())

@@ -27,4 +27,8 @@ def create_multimodal_client() -> BaseMultimodalClient:
         from app.llm.kimi_client import KimiClient
         return KimiClient()
 
-    raise ValueError(f"不支持的 MULTIMODAL_PROVIDER: {provider}，可选: doubao / kimi")
+    if provider == "gpt":
+        from app.llm.gpt_client import GptClient
+        return GptClient()
+
+    raise ValueError(f"不支持的 MULTIMODAL_PROVIDER: {provider}，可选: doubao / kimi / gpt")

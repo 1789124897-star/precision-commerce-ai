@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     KIMI_BASE_URL: str = "https://api.moonshot.cn/v1/chat/completions"
     KIMI_MODEL: str = "kimi-k3"
 
+    # GPT — 多模态
+    GPT_API_KEY: str = ""
+    GPT_BASE_URL: str = "https://api.sudocode.chat/v1/chat/completions"
+    GPT_MODEL: str = "gpt-5.6-sol"
+    GPT_PROXY: str = ""  # 走代理时填 http://127.0.0.1:7890
+
     # DeepSeek — 纯文本策略
     DEEPSEEK_MODEL: str = "deepseek-v4-pro"
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1/chat/completions"
