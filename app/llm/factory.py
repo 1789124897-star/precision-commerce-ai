@@ -1,7 +1,7 @@
 """LLM 客户端工厂"""
 
 from app.core.config import settings
-from app.llm.base import BaseImageClient, BaseLLMClient, BaseMultimodalClient
+from app.llm.base import BaseImageClient, BaseLLMClient, BaseMultimodalClient, BaseVideoClient
 
 
 def create_text_client(model: str = "") -> BaseLLMClient:
@@ -28,8 +28,8 @@ def create_multimodal_client(provider: str = "") -> BaseMultimodalClient:
         return KimiClient()
 
     if provider == "gpt":
-        from app.llm.gpt_client import GptClient
-        return GptClient()
+        from app.llm.gpt_multimodal_client import GptMultimodalClient
+        return GptMultimodalClient()
 
     raise ValueError(f"不支持的 MULTIMODAL_PROVIDER: {provider}，可选: doubao / kimi / gpt")
 
@@ -47,11 +47,18 @@ def create_image_client(model: str) -> BaseImageClient:
     raise ValueError(f"不支持的图片模型: {model}，当前支持: gpt-image-2 / doubao-seedream-4-5-251128")
 
 
-def create_video_client(model: str = ""):
-    """按视频模型选客户端：2.0 Mini 走 APIMart 中转，其余（含空值）走火山方舟。"""
+def create_video_client(model: str = "") -> BaseVideoClient:
+    """视频模型选客户端."""
+    if model == "doubao-seedance-1-5-pro-251215":
+        from app.llm.seedance_client import SeedanceService
+        return SeedanceService()
+
     if model == "doubao-seedance-2-0-mini-260615":
-        from app.services.seedance_apimart import ApimartSeedanceClient
+        from app.llm.seedance_apimart_client import ApimartSeedanceClient
         return ApimartSeedanceClient()
 
-    from app.services.seedance_service import SeedanceService
+    if model:
+        raise ValueError(f"不支持的视频模型: {model}，当前支持 doubao-seedance-1-5-pro-251215 / doubao-seedance-2-0-mini-260615")
+
+    from app.llm.seedance_client import SeedanceService
     return SeedanceService()

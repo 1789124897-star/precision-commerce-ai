@@ -32,7 +32,6 @@ class ComposeVideoRequest(BaseModel):
 
 class ShotSchema(BaseModel):
     image_index: int = 0
-    image_url: str = ""
     first_frame_url: str = ""
     last_frame_url: str = ""
     scene_prompt: str = ""
@@ -58,14 +57,13 @@ class ComposePremiumRequest(BaseModel):
 
 class GenerateShotRequest(BaseModel):
     """独立生成单个分镜"""
-    image_url: str = ""
     first_frame_url: str = ""
     last_frame_url: str = ""
     scene_prompt: str = ""
-    voiceover: str = ""  # 台词：有声模式下拼进 prompt 让模型念出
+    voiceover: str = ""  # 台词
     duration_sec: float = 4.0
     aspect_ratio: str = "9:16"
-    generate_audio: bool = False
+    generate_audio: bool = False # 是否有声
     resolution: str = "720p"
     shot_index: int = 0
     seedance_model: str = ""  

@@ -174,7 +174,13 @@ def generate_shot_task(self, task_id: str):
 
     try:
         cb = _progress_callback(task_id)
-        client = create_video_client(request_json.get("seedance_model", ""))
+
+        seedance_model = request_json.get("seedance_model", "")
+        if not seedance_model:
+            logger.info("task_id=%s 未指定视频模型，降级默认 Seedance 1.5 Pro", task_id)
+        client = create_video_client(seedance_model)
+        request_json.pop("seedance_model", None)  # 模型已由工厂分流，不再透传给 generate_shot
+
         clip_path = client.generate_shot_sync(**request_json, on_progress=lambda stage, detail: cb(0, f"{stage}: {detail}"))
     except AppException as e:
         logger.error("业务失败 task_id=%s: %s", task_id, e.message)

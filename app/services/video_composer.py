@@ -509,7 +509,6 @@ class VideoComposer:
             "shots": [s],
             "tts_duration": s.get("duration_sec", 5),
             "seedance_dur": max(4, int(ceil(s.get("duration_sec", 5)))),
-            "image_url": s.get("image_url", ""),
             "first_frame_url": s.get("first_frame_url", ""),
             "last_frame_url": s.get("last_frame_url", ""),
             "scene_prompt": s.get("scene_prompt", ""),
@@ -524,17 +523,15 @@ class VideoComposer:
             scene_prompt = group.get("scene_prompt", "")
             scene_prompt_en = group.get("scene_prompt_en", "")  # 英文 → Seedance
             seedance_prompt = scene_prompt_en or scene_prompt  # 优先英文，兜底中文
-            image_url = group.get("image_url", "")
             first_frame_url = group.get("first_frame_url", "")
             last_frame_url = group.get("last_frame_url", "")
             # 本地图片 → 公网 URL（Seedance 只接受公网可访问图片）
             try:
-                image_url = image_host.to_public(image_url)
                 first_frame_url = image_host.to_public(first_frame_url)
                 last_frame_url = image_host.to_public(last_frame_url)
             except Exception as e:
                 logger.warning(f"{label} 图片公网化失败，回退 Ken Burns: {e}")
-                image_url = first_frame_url = last_frame_url = ""
+                first_frame_url = last_frame_url = ""
             group_mode = group.get("mode", "single")
             segment_count = len(group.get("shots", [group]))
             # 单段模式优先用预生成 clip
@@ -581,10 +578,10 @@ class VideoComposer:
                     logger.warning(f"{label} 首尾帧失败: {e}")
 
             # Seedance 图生视频，失败回退 Ken Burns
-            if clip is None and image_url and image_url.startswith("http"):
+            if clip is None and first_frame_url and first_frame_url.startswith("http"):
                 try:
                     seedance_path = asyncio.run(seedance.generate_clip_from_url(
-                        image_url=image_url,
+                        image_url=first_frame_url,
                         prompt=seedance_prompt or "medium shot of product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens",
                         aspect_ratio=aspect_ratio,
                         duration_sec=dur,

@@ -795,7 +795,6 @@ function initStoryboard() {
     for (let i = 0; i < n; i++) {
       const seg = segs && segs[i];
       shots.push({
-        image_url: '',
         first_frame_url: '',
         last_frame_url: '',
         scene_prompt: '',
@@ -833,8 +832,8 @@ function renderStoryboard() {
     const selHtml = `<div style="display:flex;gap:8px;flex-direction:column;">
         <div style="display:flex;align-items:center;gap:4px;">
           <span style="font-size:11px;color:var(--text2);white-space:nowrap;">首帧</span>
-          <input class="shot-input" placeholder="贴入图片 URL" value="${esc(s.first_frame_url || s.image_url || '')}"
-            onchange="const v=this.value;S.storyboard.shots[${i}].first_frame_url=v;S.storyboard.shots[${i}].image_url=v;" style="flex:1;">
+          <input class="shot-input" placeholder="贴入图片 URL" value="${esc(s.first_frame_url || '')}"
+            onchange="S.storyboard.shots[${i}].first_frame_url=this.value" style="flex:1;">
         </div>
         <div style="display:flex;align-items:center;gap:4px;">
           <span style="font-size:11px;color:var(--text2);white-space:nowrap;">尾帧</span>
@@ -906,7 +905,7 @@ function renderStoryboardFooter() {
 }
 
 function addShot() {
-  S.storyboard.shots.push({ image_url: '', first_frame_url: '', last_frame_url: '', scene_prompt: '', duration_sec: 5 });
+  S.storyboard.shots.push({ first_frame_url: '', last_frame_url: '', scene_prompt: '', duration_sec: 5 });
   renderStoryboard();
 }
 
@@ -932,7 +931,7 @@ async function generateShot(i) {
   if (shot.clip_status === 'running') return;
 
   // 拦截空内容：既无图也无场景描述
-  const firstFrame = shot.first_frame_url || shot.image_url || '';
+  const firstFrame = shot.first_frame_url || '';
   const hasImage = (firstFrame || shot.last_frame_url);
   const hasPrompt = (shot.scene_prompt || '').trim();
   if (!hasImage && !hasPrompt) {
@@ -965,7 +964,6 @@ async function generateShot(i) {
     const res = await fetch(`${A8_API}/video/generate-shot`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        image_url: firstFrame,
         first_frame_url: shot.first_frame_url || '',
         last_frame_url: shot.last_frame_url || '',
         scene_prompt: shot.scene_prompt_en || shot.scene_prompt || '',

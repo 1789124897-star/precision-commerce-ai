@@ -13,7 +13,7 @@ import httpx
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.core.utils import concise_api_error
-from app.services.seedance_service import SeedanceService
+from app.llm.seedance_client import SeedanceService
 
 logger = logging.getLogger(__name__)
 

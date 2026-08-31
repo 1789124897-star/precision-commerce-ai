@@ -12,7 +12,7 @@ from app.llm.http import post_with_retry
 logger = logging.getLogger(__name__)
 
 
-class GptClient(BaseMultimodalClient):
+class GptMultimodalClient(BaseMultimodalClient):
     """GPT 多模态客户端——图片 + 文本 → 分析报告。"""
 
     def __init__(self) -> None:

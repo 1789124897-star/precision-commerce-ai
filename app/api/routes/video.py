@@ -111,7 +111,6 @@ async def generate_shot(body: GenerateShotRequest, db: AsyncSession = Depends(ge
         db,
         task_type="shot_gen",
         request_json={
-            "image_url": body.image_url,
             "first_frame_url": body.first_frame_url,
             "last_frame_url": body.last_frame_url,
             "prompt": body.scene_prompt,

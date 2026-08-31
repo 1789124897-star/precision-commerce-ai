@@ -12,12 +12,13 @@ from app.core.config import settings
 from app.core.exceptions import AppException
 from app.core.paths import VIDEO_DIR as SEEDANCE_VIDEO_DIR
 from app.core.utils import concise_api_error
+from app.llm.base import BaseVideoClient
 from app.services.image_host import ImageTunnelError, image_host
 
 logger = logging.getLogger(__name__)
 
 
-class SeedanceService:
+class SeedanceService(BaseVideoClient):
     """Seedance 1.5 pro 视频生成服务"""
 
     @staticmethod
@@ -298,7 +299,6 @@ class SeedanceService:
 
     async def generate_shot(
         self,
-        image_url: str = "",
         first_frame_url: str = "",
         last_frame_url: str = "",
         prompt: str = "",
@@ -309,10 +309,8 @@ class SeedanceService:
         on_progress=None,
         generate_audio: bool = False,
         resolution: str = "720p",
-        seedance_model: str = "",  # 仅接收前端透传，模型分流由工厂完成
     ) -> Path:
         """分镜生成入口：根据输入自动选择首尾帧/图生/文生模式。"""
-        image_url = self._to_public(image_url)
         first_frame_url = self._to_public(first_frame_url)
         last_frame_url = self._to_public(last_frame_url)
         if voiceover and generate_audio:
@@ -329,9 +327,9 @@ class SeedanceService:
                 generate_audio=generate_audio,
                 resolution=resolution,
             )
-        if image_url and image_url.startswith("http"):
+        if first_frame_url and first_frame_url.startswith("http"):
             return await self.generate_clip_from_url(
-                image_url=image_url,
+                image_url=first_frame_url,
                 prompt=prompt or "medium shot of product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens",
                 aspect_ratio=aspect_ratio,
                 duration_sec=duration_sec,
@@ -351,7 +349,7 @@ class SeedanceService:
         )
 
     def _to_public(self, url_or_path: str) -> str:
-        """本地图片路径 → 公网 URL（Seedance 只接受公网可访问图片）。"""
+        """本地图片路径 → 公网 URL。"""
         try:
             return image_host.to_public(url_or_path)
         except ImageTunnelError as exc:

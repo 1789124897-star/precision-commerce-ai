@@ -17,7 +17,6 @@ class ShotGroup:
     duration_sec: float          # Seedance 视频时长（取整后）
     srt_duration_sec: float      # 实际口播时长
     merged_count: int
-    image_url: str = ""
     first_frame_url: str = ""
     last_frame_url: str = ""
     scene_prompt: str = ""
