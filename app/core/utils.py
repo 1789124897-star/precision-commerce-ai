@@ -23,6 +23,25 @@ _MIME_MAP: dict[str, str] = {
 _FILENAME_ILLEGAL_RE = re.compile(r'[\\/:*?"<>|]')
 
 
+def concise_api_error(service: str, status_code: int, body: str) -> str:
+    """供应商 API 错误响应 → 一句简洁中文；完整原文请查日志。"""
+    try:
+        err = (json.loads(body or "{}").get("error") or {})
+        code = str(err.get("code") or "")
+        msg = str(err.get("message") or "")
+    except (ValueError, TypeError):
+        code, msg = "", ""
+    if code == "AccountOverdueError" or "overdue balance" in msg.lower():
+        return f"{service}账号欠费，请充值后重试"
+    if "insufficient balance" in msg.lower():
+        return f"{service}余额不足，请充值后重试"
+    if msg:
+        return f"{service}错误: {msg[:120]}"
+    if code:
+        return f"{service}错误[{code}]"
+    return f"{service}错误 HTTP {status_code}"
+
+
 def image_to_data_url(filepath: str) -> str:
     """本地图片文件 → base64 data URL。"""
     filename = Path(filepath).name

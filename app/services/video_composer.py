@@ -26,7 +26,8 @@ from proglog import ProgressBarLogger
 from app.core.exceptions import AppException
 from app.core.paths import VIDEO_DIR, from_output_url
 from app.core.srt_utils import srt_to_seconds
-from app.services.seedance_service import SeedanceService
+from app.llm.factory import create_video_client
+from app.services.image_host import image_host
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +176,6 @@ class VideoComposer:
 
             report(1.0, "合成完成")
         finally:
-            # 清理 MoviePy 临时文件
             if has_audio:
                 audio.close()
             video.close()
@@ -463,10 +463,12 @@ class VideoComposer:
         generate_audio: bool = False,
         on_progress: Optional[Callable[[float, str], None]] = None,
         segment_durations: Optional[list[float]] = None,  # noqa: ARG002
+        seedance_model: str = "",  # 前端选的视频模型，决定走火山方舟还是 APIMart
     ) -> dict:
         """精品模式：按分镜列表逐镜生成视频"""
         aspect_ratio = aspect_ratio or "9:16"
         resolution = resolution or "720p"
+        seedance = create_video_client(seedance_model)
         def report(pct, stage):
             logger.info(f"[{pct*100:.0f}%] {stage}")
             if on_progress:
@@ -525,6 +527,14 @@ class VideoComposer:
             image_url = group.get("image_url", "")
             first_frame_url = group.get("first_frame_url", "")
             last_frame_url = group.get("last_frame_url", "")
+            # 本地图片 → 公网 URL（Seedance 只接受公网可访问图片）
+            try:
+                image_url = image_host.to_public(image_url)
+                first_frame_url = image_host.to_public(first_frame_url)
+                last_frame_url = image_host.to_public(last_frame_url)
+            except Exception as e:
+                logger.warning(f"{label} 图片公网化失败，回退 Ken Burns: {e}")
+                image_url = first_frame_url = last_frame_url = ""
             group_mode = group.get("mode", "single")
             segment_count = len(group.get("shots", [group]))
             # 单段模式优先用预生成 clip
@@ -553,7 +563,7 @@ class VideoComposer:
             # ── 镜头组首尾帧模式（多段合并） ──
             if clip is None and group_mode == "first_last" and first_frame_url and last_frame_url:
                 try:
-                    seedance_path = asyncio.run(SeedanceService().generate_clip_first_last_frame(
+                    seedance_path = asyncio.run(seedance.generate_clip_first_last_frame(
                         first_frame_url=first_frame_url,
                         last_frame_url=last_frame_url,
                         prompt=seedance_prompt or "macro close-up of product, slow push-in with soft studio lighting, subtle product rotation, 50mm lens, cinematic depth of field",
@@ -573,7 +583,7 @@ class VideoComposer:
             # Seedance 图生视频，失败回退 Ken Burns
             if clip is None and image_url and image_url.startswith("http"):
                 try:
-                    seedance_path = asyncio.run(SeedanceService().generate_clip_from_url(
+                    seedance_path = asyncio.run(seedance.generate_clip_from_url(
                         image_url=image_url,
                         prompt=seedance_prompt or "medium shot of product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens",
                         aspect_ratio=aspect_ratio,
@@ -592,7 +602,7 @@ class VideoComposer:
             # 纯文生视频：无参考图
             if clip is None and seedance_prompt:
                 try:
-                    seedance_path = asyncio.run(SeedanceService().generate_clip_text_only(
+                    seedance_path = asyncio.run(seedance.generate_clip_text_only(
                         prompt=seedance_prompt,
                         aspect_ratio=aspect_ratio,
                         duration_sec=dur,

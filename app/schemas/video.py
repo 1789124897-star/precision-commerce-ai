@@ -51,6 +51,7 @@ class ComposePremiumRequest(BaseModel):
     aspect_ratio: str = "9:16"
     generate_audio: bool = False
     resolution: str = "720p"
+    seedance_model: str = ""  # 视频模型：Mini 走 APIMart，其余走火山
     segment_durations: Optional[list[float]] = None
     parent_task_id: Optional[str] = None  # 上游 TTS 任务
 
@@ -61,9 +62,11 @@ class GenerateShotRequest(BaseModel):
     first_frame_url: str = ""
     last_frame_url: str = ""
     scene_prompt: str = ""
-    duration_sec: float = 5.0
+    voiceover: str = ""  # 台词：有声模式下拼进 prompt 让模型念出
+    duration_sec: float = 4.0
     aspect_ratio: str = "9:16"
     generate_audio: bool = False
     resolution: str = "720p"
     shot_index: int = 0
+    seedance_model: str = ""  
     parent_task_id: Optional[str] = None  # 上游 TTS 任务

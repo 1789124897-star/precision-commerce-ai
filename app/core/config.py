@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     GPT_API_KEY: str = ""
     GPT_BASE_URL: str = "https://api.sudocode.chat/v1/chat/completions"
     GPT_MODEL: str = "gpt-5.6-sol"
-    GPT_PROXY: str = ""  # 走代理时填 http://127.0.0.1:7890
+    GPT_PROXY: str = ""  
 
     # DeepSeek — 纯文本策略
     DEEPSEEK_MODEL: str = "deepseek-v4-pro"
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     SEEDREAM_IMAGE_MODEL: str = ""
     IMAGE_MAX_CONCURRENT: int = 3
 
-    # GPT 生图（OpenAI 兼容）
+    # GPT 生图
     GPT_IMAGE_URL: str = "https://api.sudocode.chat/v1/images/generations"
     GPT_IMAGE_MODEL: str = "gpt-image-2"
 
@@ -48,6 +48,16 @@ class Settings(BaseSettings):
     SEEDANCE_VIDEO_MODEL: str = "doubao-seedance-1-5-pro-251215"
     SEEDANCE_POLL_INTERVAL: float = 5.0
     SEEDANCE_POLL_MAX: int = 60
+
+    # 图床（cloudflared 隧道）
+    CLOUDFLARED_BIN: str = ""
+
+    # APIMart 中转 — Seedance 2.0 Mini 视频
+    APIMART_API_KEY: str = ""
+    APIMART_VIDEO_MODEL: str = "seedance-2.0-mini"
+    APIMART_VIDEO_URL: str = "https://api.apimart.ai/v1/videos/generations"
+    APIMART_VIDEO_TASK_URL: str = "https://api.apimart.ai/v1/tasks" 
+    APIMART_PROXY: str = ""  # 走代理时填 http://127.0.0.1:7890
 
     # 基础设施
     EDGE_PATH: str = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"

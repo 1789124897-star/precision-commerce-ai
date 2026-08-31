@@ -160,6 +160,7 @@ async function doAnalyze() {
     fd.append('name', name); fd.append('function', func); fd.append('price', price);
     fd.append('extra', extra);
     fd.append('custom_prompt', document.getElementById('anaSystemPrompt').value);
+    fd.append('model', document.getElementById('anaModel').value);
     S.productImageFiles.forEach(f => fd.append('images', f));
     const res = await fetch(`${A8_API}/analysis/submit`, { method:'POST', body: fd });
     if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.message || d.detail || `HTTP ${res.status}`); }
@@ -207,6 +208,7 @@ async function doDiffStrategies() {
     const body = JSON.stringify({
       analysis: report,
       system_prompt: document.getElementById('dsSystemPrompt').value,
+      model: document.getElementById('dsModel').value,
     });
     const res = await fetch(`${A8_API}/analysis/strategies`, {
       method:'POST',
@@ -460,6 +462,8 @@ async function genSelectedImages(key) {
     fd.append('prompts', JSON.stringify(tagged));
     const sizeEl = document.getElementById('genSize_' + key);
     if (sizeEl && sizeEl.value) fd.append('size', sizeEl.value);
+    const modelEl = document.getElementById('dsGenModel');
+    if (modelEl && modelEl.value) fd.append('model', modelEl.value);
 
     const res = await fetch(`${A8_API}/images/generate`, { method:'POST', body:fd });
     if (!res.ok) throw new Error((await res.json().catch(()=>({})).message || `HTTP ${res.status}`));
@@ -690,15 +694,27 @@ async function doGenTTS() {
   } catch(e) { showS('vidTTSStatus', 'error', `提交失败: ${e.message}`); btn.disabled = false; btn.textContent = '🎙️ 重新配音'; }
 }
 
+// 视频 AI 模型切换：Mini 不支持 1080p，禁用该选项并自动降到 720p
+function vidAIModelChange() {
+  const model = document.getElementById('vidAIModel').value;
+  const isMini = model.includes('mini');
+  const opt1080 = document.getElementById('vidRes1080p');
+  if (opt1080) opt1080.disabled = isMini;
+  const res = document.getElementById('vidResolution');
+  if (isMini && res && res.value === '1080p') res.value = '720p';
+}
+
 // 合成参数渲染
 function vidRenderComposeParams() {
   const mode = document.getElementById('vidCompose').value;
   const el = document.getElementById('vidComposeParams');
   const premiumZone = document.getElementById('vidPremiumZone');
   const uploadSec = document.getElementById('vidUploadSection');
+  const aiModelRow = document.getElementById('vidAIModelRow');
   if (mode === 'fast') {
     S.vidGenAudio = false;
     S.vidComposeMode = 'fast';
+    if (aiModelRow) aiModelRow.style.display = 'none';  // 快速模式不用 AI，隐藏模型选择
     uploadSec.style.display = '';
     premiumZone.style.display = 'none';
     const ttsImportBtn = document.getElementById('vidImportTtsBtn');
@@ -726,6 +742,7 @@ function vidRenderComposeParams() {
     }
     S.vidGenAudio = mode === 'premium_audio';
     S.vidComposeMode = mode;
+    if (aiModelRow) aiModelRow.style.display = '';  // 精品模式显示模型选择
     uploadSec.style.display = '';
     premiumZone.style.display = '';
     // 精品模式：隐藏图片上传（分镜已预生成），有声模式连音频/字幕也隐藏
@@ -859,6 +876,7 @@ function renderStoryboard() {
           </div>
         </div>
         ${s.clip_url ? `<div class="shot-body-row"><video class="shot-clip-preview" src="${s.clip_url}" controls muted style="width:100%;max-height:200px;border-radius:6px;"></video></div>` : ''}
+        ${s.clip_status === 'error' && s.clip_error ? `<div class="shot-body-row" style="color:#e53e3e;font-size:11px;line-height:1.5;word-break:break-all;" title="${esc(s.clip_error)}">❌ ${esc(s.clip_error.slice(0, 200))}${s.clip_error.length > 200 ? '…' : ''}</div>` : ''}
         <div class="shot-body-row" style="display:flex;align-items:center;gap:8px;">
           <button class="btn btn-ghost btn-sm" onclick="generateShot(${i})" id="btnGenShot${i}" style="flex:1;${s.clip_status==='running'?'opacity:0.6':''}">
             ${s.clip_status === 'running' ? '⏳ 生成中...' : s.clip_url ? '🔄 重新生成' : '▶ 生成此镜'}
@@ -951,10 +969,12 @@ async function generateShot(i) {
         first_frame_url: shot.first_frame_url || '',
         last_frame_url: shot.last_frame_url || '',
         scene_prompt: shot.scene_prompt_en || shot.scene_prompt || '',
+        voiceover: shot.voiceover || '',
         duration_sec: actualDur,
         aspect_ratio: spec,
         generate_audio: genAudio,
         resolution: resolution,
+        seedance_model: document.getElementById('vidAIModel') ? document.getElementById('vidAIModel').value : '',
         shot_index: i,
         parent_task_id: S.ttsTaskId || null,
       }),
@@ -982,20 +1002,21 @@ async function generateShot(i) {
         if (d.status === 'SUCCESS') {
           clearInterval(pollTimer);
           shot.clip_url = d.result.video_path;
+          shot.clip_audio = genAudio;  // 记录该素材是否为有声版
           shot.clip_status = 'done';
           renderStoryboard();
         }
         if (d.status === 'FAILURE') {
           clearInterval(pollTimer);
           shot.clip_status = 'error';
-          if (btnEl) btnEl.textContent = '🔄 重试';
+          shot.clip_error = d.error_message || (d.result && d.result.error) || '生成失败，请重试';
           renderStoryboard();
         }
       } catch (_) {}
     }, 2000);
   } catch (e) {
     shot.clip_status = 'error';
-    if (btnEl) btnEl.textContent = '🔄 重试';
+    shot.clip_error = e.message || '请求失败，请重试';
     renderStoryboard();
   }
 }
@@ -1066,7 +1087,11 @@ async function doComposePremium() {
     }
 
     // Step 2: 合成视频
-    const shotsWithClips = activeShots.map(s => ({...s, clip_path: s.clip_url || ''}));
+    // 有声模式：无声素材必须重新生成（Seedance 原生音频），否则会被直接复用导致没声音
+    const shotsWithClips = activeShots.map(s => ({
+      ...s,
+      clip_path: (S.vidGenAudio && !s.clip_audio) ? '' : (s.clip_url || ''),
+    }));
     stage.textContent = '提交合成任务...';
     bar.style.width = '10%';
 
@@ -1081,6 +1106,7 @@ async function doComposePremium() {
         aspect_ratio: spec,
         generate_audio: S.vidGenAudio || false,
         resolution: resolution,
+        seedance_model: document.getElementById('vidAIModel') ? document.getElementById('vidAIModel').value : '',
         parent_task_id: composeParentId,
       }),
     });

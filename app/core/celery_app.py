@@ -5,7 +5,7 @@ from celery.schedules import crontab
 from app.core.config import settings
 from app.core.logging import setup_logging
 
-setup_logging()  # worker 启动时初始化日志（不依赖 FastAPI main）
+setup_logging()  # worker 启动时初始化日志
 
 celery_app = Celery(
     "precision_commerce",

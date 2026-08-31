@@ -34,9 +34,11 @@ class AIClient:
         system_prompt: str,
         user_prompt: str,
         image_data_urls: list[str],
+        provider: str = "",
     ) -> str:
-        """多模态：商品图片 + 提示词 → 分析报告文本。"""
-        return await self._multimodal_client.analyze_multimodal(
+        """多模态：商品图片 + 提示词 → 分析报告文本。provider 空用 .env 配置。"""
+        client = create_multimodal_client(provider)
+        return await client.analyze_multimodal(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             image_data_urls=image_data_urls,
@@ -46,9 +48,10 @@ class AIClient:
     # 纯文本推理 → DeepSeek
     # ==================================================================
 
-    async def generate_strategy(self, *, prompt: str) -> dict[str, Any]:
-        """策略提示词 → JSON 策略结果。"""
-        return await self._text_client.generate_json(
+    async def generate_strategy(self, *, prompt: str, model: str = "") -> dict[str, Any]:
+        """策略提示词 → JSON 策略结果。model 空用 .env 配置。"""
+        client = create_text_client(model)
+        return await client.generate_json(
             system_prompt="你是一名资深电商策略师，只返回合法 JSON，输出必须使用简体中文。",
             user_prompt=prompt,
             temperature=0.6,

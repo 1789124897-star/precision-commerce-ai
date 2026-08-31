@@ -78,7 +78,6 @@ class GptImageClient(BaseImageClient):
 
         if ref_image_data_urls:
             url = settings.GPT_IMAGE_URL.rsplit("/", 1)[0] + "/edits"
-            # httpx 多文件用同名 field 重复的 list 形式，dict 嵌套 list 会被当成文件内容
             files = [("image[]", _data_url_to_file(d)) for d in ref_image_data_urls]
             logger.info("GPT 生图(edits): ref_images=%d", len(ref_image_data_urls))
         else:
@@ -104,7 +103,6 @@ class GptImageClient(BaseImageClient):
         if url.startswith("http"):
             return url
 
-        # 中转站返回 data URL / b64_json：解码后落盘到 uploads 目录
         b64 = url.split(",", 1)[1] if url.startswith("data:") else img.get("b64_json")
         if not b64:
             raise AppException(f"生图响应无 url/b64_json: {str(img)[:200]}", 502)

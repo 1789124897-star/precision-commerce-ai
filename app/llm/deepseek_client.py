@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 class DeepSeekClient(BaseLLMClient):
     """DeepSeek API 客户端——文本推理"""
 
-    def __init__(self) -> None:
+    def __init__(self, model: str = "") -> None:
         self._api_key = settings.DEEPSEEK_API_KEY
         self._base_url = settings.DEEPSEEK_BASE_URL
-        self._model = settings.DEEPSEEK_MODEL
+        self._model = model or settings.DEEPSEEK_MODEL
         if not self._api_key:
             raise AppException("未配置 DEEPSEEK_API_KEY，请在 .env 中设置")
         if not self._base_url:

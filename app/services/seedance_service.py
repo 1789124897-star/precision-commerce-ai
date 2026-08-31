@@ -11,6 +11,8 @@ import httpx
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.core.paths import VIDEO_DIR as SEEDANCE_VIDEO_DIR
+from app.core.utils import concise_api_error
+from app.services.image_host import ImageTunnelError, image_host
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,7 @@ class SeedanceService:
         last_frame_url: str = "",
         generate_audio: bool = False,
         resolution: str = "720p",
+        model: str = "",
     ) -> str:
         """提交 Seedance 1.5 pro 视频生成任务，返回 task_id。
 
@@ -66,8 +69,9 @@ class SeedanceService:
 
         content.append({"type": "text", "text": prompt or "medium shot product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens"})
 
+        model = model or settings.SEEDANCE_VIDEO_MODEL
         payload = {
-            "model": settings.SEEDANCE_VIDEO_MODEL,
+            "model": model,
             "content": content,
             "duration": int(duration_sec),
             "ratio": aspect_ratio,
@@ -79,7 +83,7 @@ class SeedanceService:
         logger.info(
             "Seedance 提交 [%s][%s]: model=%s duration=%ds prompt=%s...",
             mode, audio_label,
-            settings.SEEDANCE_VIDEO_MODEL, int(duration_sec), prompt[:60],
+            model, int(duration_sec), prompt[:60],
         )
 
         async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
@@ -95,7 +99,7 @@ class SeedanceService:
             if resp.status_code != 200:
                 body = resp.text[:300]
                 logger.error(f"Seedance 提交失败 HTTP {resp.status_code}: {body}")
-                raise AppException(f"Seedance API error {resp.status_code}: {body}", 502)
+                raise AppException(concise_api_error("火山方舟", resp.status_code, body), 502)
 
             task_id: str = data.get("id") or data.get("taskId") or data.get("task_id")
             if not task_id:
@@ -107,47 +111,74 @@ class SeedanceService:
     async def poll_task(self, task_id: str, poll_interval: float = 5.0, poll_max: int = 60) -> str:
         """轮询 Seedance 1.5 任务状态，返回 video_url。"""
         check_url = f"{settings.SEEDANCE_VIDEO_URL}/{task_id}"
+        poll_fails = 0
 
         for attempt in range(poll_max):
             await asyncio.sleep(poll_interval)
-            async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
-                resp = await client.get(
-                    check_url,
-                    headers={"Authorization": f"Bearer {settings.VOLCANO_API_KEY}"}
-                )
-                if resp.status_code != 200:
-                    logger.warning(f"轮询 HTTP {resp.status_code}: {resp.text[:200]}")
-                    continue
+            try:
+                async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
+                    resp = await client.get(
+                        check_url,
+                        headers={"Authorization": f"Bearer {settings.VOLCANO_API_KEY}"}
+                    )
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadError, httpx.RemoteProtocolError) as e:
+                # 网络瞬时抖动不影响任务本身，容忍重试；连续失败才放弃
+                poll_fails += 1
+                if poll_fails >= 5:
+                    logger.error(f"轮询连续 {poll_fails} 次网络失败，放弃: {e}")
+                    raise
+                logger.warning(f"轮询第{attempt+1}次网络异常(连续{poll_fails}次)，继续下一轮: {e}")
+                continue
+            poll_fails = 0
+            if resp.status_code != 200:
+                logger.warning(f"轮询 HTTP {resp.status_code}: {resp.text[:200]}")
+                continue
 
-                data = resp.json()
-                status = data.get("status", "")
-                logger.info(f"Seedance 轮询 {attempt+1}/{poll_max}: status={status}")
+            data = resp.json()
+            status = data.get("status", "")
+            logger.info(f"Seedance 轮询 {attempt+1}/{poll_max}: status={status}")
 
-                if status == "succeeded":
-                    video_url: str = data.get("content", {}).get("video_url")
-                    if video_url:
-                        logger.info(f"Seedance 任务完成: {task_id} → {video_url}")
-                        return video_url
-                    logger.warning(f"Seedance 已完成但无 video_url: {json.dumps(data, ensure_ascii=False)[:300]}")
-                    raise AppException("Seedance 任务完成但未返回视频 URL", 502)
+            if status == "succeeded":
+                video_url: str = data.get("content", {}).get("video_url")
+                if video_url:
+                    logger.info(f"Seedance 任务完成: {task_id} → {video_url}")
+                    return video_url
+                logger.warning(f"Seedance 已完成但无 video_url: {json.dumps(data, ensure_ascii=False)[:300]}")
+                raise AppException("Seedance 任务完成但未返回视频 URL", 502)
 
-                elif status == "failed":
-                    err_msg = data.get("error", {}).get("message", "任务失败")
-                    raise AppException(f"Seedance 任务失败: {err_msg}", 502)
+            elif status == "failed":
+                err_msg = data.get("error", {}).get("message", "任务失败")
+                raise AppException(f"Seedance 任务失败: {err_msg[:120]}", 502)
 
         raise TimeoutError(f"Seedance 任务超时: {task_id} (轮询 {poll_max} 次)")
+
+    async def _download_with_retry(self, video_url: str, output_path: Path, proxy: Optional[str] = None) -> Path:
+        """下载视频：网络异常最多重试 3 次（间隔 3/6s）；失败时错误信息带视频地址便于用户自查。"""
+        last_err = ""
+        for attempt in range(1, 4):
+            try:
+                async with httpx.AsyncClient(timeout=120, trust_env=False, proxy=proxy, follow_redirects=True) as client:
+                    resp = await client.get(video_url)
+                    if resp.status_code != 200:
+                        raise AppException(f"视频下载失败 HTTP {resp.status_code}，地址: {video_url}", 502)
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    output_path.write_bytes(resp.content)
+                logger.info(f"视频已保存: {output_path} ({output_path.stat().st_size} bytes)")
+                return output_path
+            except AppException:
+                raise
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+                if attempt < 3:
+                    wait = 3 * attempt
+                    logger.warning(f"视频下载失败(第{attempt}次)，{wait}s 后重试: {last_err}")
+                    await asyncio.sleep(wait)
+        raise AppException(f"视频下载失败(重试3次): {last_err}，地址: {video_url}", 502)
 
     async def download_video(self, video_url: str, output_path: Path) -> Path:
         """下载 Seedance 生成的视频到本地。"""
         logger.info(f"下载视频: {video_url} → {output_path}")
-        async with httpx.AsyncClient(timeout=120, trust_env=False) as client:
-            resp = await client.get(video_url, follow_redirects=True)
-            if resp.status_code != 200:
-                raise AppException(f"视频下载失败 HTTP {resp.status_code}", 502)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(resp.content)
-        logger.info(f"视频已保存: {output_path} ({output_path.stat().st_size} bytes)")
-        return output_path
+        return await self._download_with_retry(video_url, output_path)
 
     async def generate_clip_from_url(
         self,
@@ -161,6 +192,7 @@ class SeedanceService:
         resolution: str = "720p",
     ) -> Path:
         """直接从公网 URL 调 Seedance（图生视频-首帧），跳过图床上传。"""
+        image_url = self._to_public(image_url)
 
         def notify(s, d=""):
             self._notify(s, d, shot_index, on_progress)
@@ -230,6 +262,8 @@ class SeedanceService:
         resolution: str = "720p",
     ) -> Path:
         """图生视频-首尾帧：指定首帧和尾帧图片，AI 生成中间过渡视频。"""
+        first_frame_url = self._to_public(first_frame_url)
+        last_frame_url = self._to_public(last_frame_url)
 
         def notify(s, d=""):
             self._notify(s, d, shot_index, on_progress)
@@ -268,14 +302,21 @@ class SeedanceService:
         first_frame_url: str = "",
         last_frame_url: str = "",
         prompt: str = "",
+        voiceover: str = "",
         aspect_ratio: str = "9:16",
         duration_sec: float = 5.0,
         shot_index: int = 0,
         on_progress=None,
         generate_audio: bool = False,
         resolution: str = "720p",
+        seedance_model: str = "",  # 仅接收前端透传，模型分流由工厂完成
     ) -> Path:
         """分镜生成入口：根据输入自动选择首尾帧/图生/文生模式。"""
+        image_url = self._to_public(image_url)
+        first_frame_url = self._to_public(first_frame_url)
+        last_frame_url = self._to_public(last_frame_url)
+        if voiceover and generate_audio:
+            prompt = f"{prompt}\n台词：{voiceover}" if prompt else f"台词：{voiceover}"
         if first_frame_url and last_frame_url:
             return await self.generate_clip_first_last_frame(
                 first_frame_url=first_frame_url,
@@ -308,6 +349,13 @@ class SeedanceService:
             generate_audio=generate_audio,
             resolution=resolution,
         )
+
+    def _to_public(self, url_or_path: str) -> str:
+        """本地图片路径 → 公网 URL（Seedance 只接受公网可访问图片）。"""
+        try:
+            return image_host.to_public(url_or_path)
+        except ImageTunnelError as exc:
+            raise AppException(f"图片公网化失败: {exc}", 502) from exc
 
     def generate_shot_sync(self, **kwargs: Any) -> Path:
         """同步包装，供 Celery 任务调用"""

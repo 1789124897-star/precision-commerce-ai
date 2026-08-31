@@ -20,6 +20,7 @@ async def submit_analysis(
     extra: str = Form(""),
     images: list[UploadFile] = File(default_factory=list),
     custom_prompt: str = Form(""),
+    model: str = Form(""),  # 多模态 provider：gpt / doubao / kimi
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     body = AnalysisSubmitRequest(
@@ -28,6 +29,7 @@ async def submit_analysis(
         price=price,
         extra=extra,
         custom_prompt=custom_prompt,
+        model=model,
     )
     image_paths = [save_upload(f, "analysis") for f in images if f]
 
@@ -45,7 +47,7 @@ async def do_submit_strategies(body: StrategyRequest, db: AsyncSession = Depends
     task = await TaskService.create_and_dispatch(
         db,
         task_type="strategy",
-        request_json={"analysis": body.analysis, "system_prompt": body.system_prompt},
+        request_json={"analysis": body.analysis, "system_prompt": body.system_prompt, "model": body.model},
         celery_task=generate_strategies_task,
         parent_task_id=body.parent_task_id,
     )

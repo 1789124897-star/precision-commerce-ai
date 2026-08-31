@@ -1,40 +1,25 @@
-"""1688 反爬工具集 —— 随机延迟 + 指数退避重试 + Cookie 持久化。
-
-作为库被 scraper import，也可以直接运行刷新 cookie：
-    python -m app.services.anti_crawl
-"""
+"""1688 反爬工具集 —— 随机延迟 + 指数退避重试 + Cookie 持久化，可作库或直接运行刷新 cookie。"""
 import json
+import logging
 import os
 import random
 import time
 
 from app.core.paths import OUTPUT_DIR
 
-# cookie 文件放在 output 目录
+logger = logging.getLogger(__name__)
+
 _COOKIE_FILE = OUTPUT_DIR / "1688_cookies.json"
 _MAX_AGE_HOURS = 12
 
 
-# ═══════════════════════════════════════════════════════════════════
-# 行为层
-# ═══════════════════════════════════════════════════════════════════
-
 def random_delay(min_s=2.0, max_s=3.5):
-    """随机等一小段时间，模拟人类操作间隔。"""
+    """随机等待，模拟人类操作间隔。"""
     time.sleep(random.uniform(min_s, max_s))
 
 
-# ═══════════════════════════════════════════════════════════════════
-# 登录态层
-# ═══════════════════════════════════════════════════════════════════
-
 def has_valid_cookies(cookie_file=None):
-    """cookie 文件存在且 12 小时内没有过期。
-
-    用文件修改时间（mtime）判断，不解析 cookie 内容。
-    1688 的 cookie 经常设很短的过期时间，但实际还能用，
-    所以用 mtime 比解析 expires 更靠谱。
-    """
+    """cookie 文件 12 小时内未修改则有效。"""
     path = cookie_file or _COOKIE_FILE
     if not os.path.exists(str(path)):
         return False
@@ -48,15 +33,11 @@ def save_cookies(page, cookie_file=None):
     cookies = page.cookies()
     with open(str(path), "w", encoding="utf-8") as f:
         json.dump(cookies, f, ensure_ascii=False, indent=2)
-    print("Cookie 已保存到 " + str(path))
+    logger.info("Cookie 已保存到 %s", path)
 
 
 def load_cookies(page, cookie_file=None):
-    """把之前存的 cookie 注入到当前页面。
-
-    只在 cookie 有效时才加载，过期就不加载。
-    返回 True 表示加载成功，False 表示没有有效 cookie。
-    """
+    """有效则把 cookie 注入页面，返回是否成功。"""
     path = cookie_file or _COOKIE_FILE
     if not has_valid_cookies(path):
         return False
@@ -67,28 +48,19 @@ def load_cookies(page, cookie_file=None):
             page.set.cookies(c)
         except Exception:
             pass
-    print("Cookie 已加载，来自 " + str(path))
+    logger.info("Cookie 已加载，来自 %s", path)
     return True
 
 
 def ensure_fresh_cookies(page, email="", password=""):
-    """确保 cookie 文件是新鲜的。
-
-    cookie 没过期 → 跳过。
-    cookie 过期了 → 打开 1688 登录页拿新 cookie。
-    有账密就顺手登录，登不上也不管，cookie 照存。
-
-    核心目的不是登录，是刷新 cookie 文件，
-    让后续 12 小时的爬取都能复用同样的身份标识。
-    """
+    """cookie 过期则打开登录页刷新 cookie 文件（有账密顺手登录）。"""
     if has_valid_cookies():
         return
 
-    print("Cookie 过期或不存在，开始刷新...")
+    logger.info("Cookie 过期或不存在，开始刷新...")
     page.get("https://login.1688.com/member/signin.htm")
     random_delay(1.0, 2.0)
 
-    # 有账密就试登录，没有就只拿游客 cookie
     if email and password:
         _try_login(page, email, password)
 
@@ -130,14 +102,10 @@ def _try_login(page, email, password):
 
     try:
         page.wait.url_change("1688.com", timeout=15)
-        print("1688 登录成功")
+        logger.info("1688 登录成功")
     except Exception:
-        print("登录可能需要验证码，不管了，cookie 照存")
+        logger.warning("登录可能需要验证码，cookie 照存")
 
-
-# ═══════════════════════════════════════════════════════════════════
-# 命令行入口：手动刷新 cookie
-# ═══════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
