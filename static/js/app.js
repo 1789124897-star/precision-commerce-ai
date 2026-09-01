@@ -808,10 +808,6 @@ function initStoryboard() {
   }
 }
 
-function getAvailableImages() {
-  return S.uploadedImages || [];
-}
-
 function renderStoryboard() {
   const el = document.getElementById('vidComposeParams');
   // 首尾帧填写提示
@@ -972,7 +968,7 @@ async function generateShot(i) {
         aspect_ratio: spec,
         generate_audio: genAudio,
         resolution: resolution,
-        seedance_model: document.getElementById('vidAIModel') ? document.getElementById('vidAIModel').value : '',
+        video_model: document.getElementById('vidAIModel') ? document.getElementById('vidAIModel').value : '',
         shot_index: i,
         parent_task_id: S.ttsTaskId || null,
       }),
@@ -1024,15 +1020,23 @@ async function doComposePremium() {
   const allShots = S.storyboard.shots;
   if (!allShots.length) { showS('vidComposeStatus', 'error', '请先添加至少一个分镜'); return; }
 
-  // 只合成已生成视频的镜头（有 clip_url）
+  // 只合成已生成视频的镜头（有 clip_url），未生成的不参与、不补生成
   const activeShots = allShots.filter(s => s.clip_url);
   if (!activeShots.length) { showS('vidComposeStatus', 'error', '请先生成至少一个分镜视频'); return; }
   const skipped = allShots.length - activeShots.length;
   if (skipped > 0) showS('vidComposeStatus', 'info', `跳过 ${skipped} 个未生成视频的镜头，合成 ${activeShots.length} 镜`);
 
+  // 有声模式：无声素材不再自动重生成（合成不用 AI），提前拦截提示
+  if (S.vidGenAudio) {
+    const silentIdx = activeShots.findIndex(s => !s.clip_audio);
+    if (silentIdx > -1) {
+      showS('vidComposeStatus', 'error', `第 ${silentIdx + 1} 镜视频无声音：请在该镜勾选“有声”重新生成，或关闭有声模式`);
+      return;
+    }
+  }
+
   const hasUploadedAudio = S.uploadedAudio && S.uploadedAudio.length;
   const hasUploadedSrt = S.uploadedSrt && S.uploadedSrt.length;
-  const fallbackImages = getAvailableImages();
 
   const btn = document.getElementById('btnCompose');
   btn.disabled = true; btn.textContent = '⏳ 合成中...';
@@ -1084,11 +1088,10 @@ async function doComposePremium() {
       }
     }
 
-    // Step 2: 合成视频
-    // 有声模式：无声素材必须重新生成（Seedance 原生音频），否则会被直接复用导致没声音
+    // Step 2: 合成视频（只用已生成的 clip 拼装，不用 AI）
     const shotsWithClips = activeShots.map(s => ({
-      ...s,
-      clip_path: (S.vidGenAudio && !s.clip_audio) ? '' : (s.clip_url || ''),
+      duration_sec: s.duration_sec || 5,
+      clip_path: s.clip_url || '',
     }));
     stage.textContent = '提交合成任务...';
     bar.style.width = '10%';
@@ -1097,14 +1100,11 @@ async function doComposePremium() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         shots: shotsWithClips,
-        images: fallbackImages,
         audio_path: hasUploadedAudio ? S.uploadedAudio : composeAudioPath,
         srt_path: hasUploadedSrt ? S.uploadedSrt : composeSrtPath,
         task_id: S.scriptTaskId || 'premium_' + Date.now().toString(36),
         aspect_ratio: spec,
-        generate_audio: S.vidGenAudio || false,
         resolution: resolution,
-        seedance_model: document.getElementById('vidAIModel') ? document.getElementById('vidAIModel').value : '',
         parent_task_id: composeParentId,
       }),
     });

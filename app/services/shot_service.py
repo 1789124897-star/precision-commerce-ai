@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class ShotService:
-    """分镜生成服务——校验/拼台词/分流策略，按 seedance_model 路由视频客户端。"""
+    """分镜生成服务——校验/拼台词/分流策略，按 video_model 路由视频客户端。"""
 
     async def generate_shot(
         self,
@@ -27,12 +27,12 @@ class ShotService:
         on_progress=None,
         generate_audio: bool = False,
         resolution: str = "720p",
-        seedance_model: str = "",
+        video_model: str = "",
     ) -> Path:
         """异步分镜生成：图片公网化 → 拼台词 → 校验 → 首尾帧/图生/文生分流。"""
-        if not seedance_model:
+        if not video_model:
             logger.info("未指定视频模型，降级默认 Seedance 1.5 Pro")
-        client = create_video_client(seedance_model)
+        client = create_video_client(video_model)
 
         try:
             first_frame_url = image_host.to_public(first_frame_url)

@@ -8,8 +8,8 @@ import httpx
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.llm.video_client_base import VideoClientBase
 from app.llm.http import post_with_retry
+from app.llm.video_client_base import VideoClientBase
 
 logger = logging.getLogger(__name__)
 

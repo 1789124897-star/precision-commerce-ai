@@ -31,28 +31,18 @@ class ComposeVideoRequest(BaseModel):
 
 
 class ShotSchema(BaseModel):
-    image_index: int = 0
-    first_frame_url: str = ""
-    last_frame_url: str = ""
-    scene_prompt: str = ""
-    scene_prompt_en: str = ""  # 英文版 → Seedance API
+    """合成镜头：已生成的视频 + 时长（合成只拼装，不再做 AI 生成）"""
     duration_sec: float = 5.0
-    overlay_text: str = ""
-    resolution: str = "720p"
-    clip_path: str = ""  # 前端预生成的 clip_url 映射
+    clip_path: str = "" 
 
 
 class ComposePremiumRequest(BaseModel):
     shots: list[ShotSchema]
-    images: list[str]
     audio_path: str
     srt_path: str = ""
     aspect_ratio: str = "9:16"
-    generate_audio: bool = False
     resolution: str = "720p"
-    seedance_model: str = ""  # 视频模型：Mini 走 APIMart，其余走火山
-    segment_durations: Optional[list[float]] = None
-    parent_task_id: Optional[str] = None  # 上游 TTS 任务
+    parent_task_id: Optional[str] = None 
 
 
 class GenerateShotRequest(BaseModel):
@@ -63,8 +53,8 @@ class GenerateShotRequest(BaseModel):
     voiceover: str = ""  # 台词
     duration_sec: float = 4.0
     aspect_ratio: str = "9:16"
-    generate_audio: bool = False # 是否有声
+    generate_audio: bool = False  # 是否有声
     resolution: str = "720p"
     shot_index: int = 0
-    seedance_model: str = ""  
-    parent_task_id: Optional[str] = None  # 上游 TTS 任务
+    video_model: str = ""   
+    parent_task_id: Optional[str] = None 

@@ -1,6 +1,5 @@
 """LLM 客户端工厂"""
 
-from app.core.config import settings
 from app.llm.base import BaseImageClient, BaseLLMClient, BaseMultimodalClient, BaseVideoClient
 
 

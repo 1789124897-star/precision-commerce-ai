@@ -8,8 +8,9 @@ from app.core.paths import to_output_url
 from app.models import Video
 from app.models.task import STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
+from app.services.premium_composer import PremiumVideoComposer
+from app.services.quick_composer import QuickVideoComposer
 from app.services.shot_service import ShotService
-from app.services.video_composer import VideoComposer
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ def compose_video_task(self, task_id: str):
         db.commit()
 
     try:
-        result = VideoComposer().compose(**request_json, task_id=task_id, on_progress=_progress_callback(task_id))
+        result = QuickVideoComposer().compose(**request_json, task_id=task_id, on_progress=_progress_callback(task_id))
     except AppException as e:
         logger.error("业务失败 task_id=%s: %s", task_id, e.message)
         with SyncSession() as db:
@@ -118,7 +119,7 @@ def compose_premium_video_task(self, task_id: str):
         db.commit()
 
     try:
-        result = VideoComposer().compose_premium(**request_json, task_id=task_id, on_progress=_progress_callback(task_id))
+        result = PremiumVideoComposer().compose_premium(**request_json, task_id=task_id, on_progress=_progress_callback(task_id))
     except AppException as e:
         logger.error("业务失败 task_id=%s: %s", task_id, e.message)
         with SyncSession() as db:
@@ -139,7 +140,7 @@ def compose_premium_video_task(self, task_id: str):
                 Video(
                     task_id=task_id,
                     video_type="compose_premium",
-                    source_images=str(request_json.get("images", [])),
+                    source_images=str([s.get("clip_path", "") for s in request_json.get("shots", [])]),
                     audio_path=request_json.get("audio_path", ""),
                     srt_path=request_json.get("srt_path", ""),
                     output_path=result.get("video_path", ""),

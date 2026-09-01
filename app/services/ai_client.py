@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class AIClient:
     """LLM 统一入口（文本 / 多模态 / 生图）。
 
-    视频生成 → ShotService / VideoComposer
+    视频生成 → ShotService / QuickVideoComposer / PremiumVideoComposer
     语音合成 → TTSEngine
     """
 

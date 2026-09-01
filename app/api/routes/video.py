@@ -72,7 +72,7 @@ async def upload_srt(file: UploadFile = File(...)) -> dict:
 
 @router.post("/compose")
 async def compose_video(body: ComposeVideoRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    """基础合成：图片 + 音频 + 字幕 → MP4。"""
+    """快速模式合成。"""
     task = await TaskService.create_and_dispatch(
         db,
         task_type="video_compose",
@@ -93,11 +93,17 @@ async def compose_video(body: ComposeVideoRequest, db: AsyncSession = Depends(ge
 
 @router.post("/compose-premium")
 async def compose_premium(body: ComposePremiumRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    """精铺合成：分镜编排 + 文案叠加 + 转场特效。"""
+    """精铺模式合成。"""
     task = await TaskService.create_and_dispatch(
         db,
         task_type="video_compose",
-        request_json=body.model_dump(exclude={"parent_task_id"}),
+        request_json={
+            "shots": [s.model_dump() for s in body.shots],
+            "audio_path": body.audio_path,
+            "srt_path": body.srt_path,
+            "aspect_ratio": body.aspect_ratio,
+            "resolution": body.resolution,
+        },
         celery_task=compose_premium_video_task,
         parent_task_id=body.parent_task_id,
     )
@@ -106,7 +112,7 @@ async def compose_premium(body: ComposePremiumRequest, db: AsyncSession = Depend
 
 @router.post("/generate-shot")
 async def generate_shot(body: GenerateShotRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    """AI 分镜生成：根据脚本自动编排图片序列。"""
+    """AI 分镜生成。"""
     task = await TaskService.create_and_dispatch(
         db,
         task_type="shot_gen",
@@ -120,7 +126,7 @@ async def generate_shot(body: GenerateShotRequest, db: AsyncSession = Depends(ge
             "shot_index": body.shot_index,
             "generate_audio": body.generate_audio,
             "resolution": body.resolution,
-            "seedance_model": body.seedance_model,
+            "video_model": body.video_model,
         },
         celery_task=generate_shot_task,
         parent_task_id=body.parent_task_id,
