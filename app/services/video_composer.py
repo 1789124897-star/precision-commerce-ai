@@ -26,8 +26,8 @@ from proglog import ProgressBarLogger
 from app.core.exceptions import AppException
 from app.core.paths import VIDEO_DIR, from_output_url
 from app.core.srt_utils import srt_to_seconds
-from app.llm.factory import create_video_client
 from app.services.image_host import image_host
+from app.services.shot_service import ShotService
 
 logger = logging.getLogger(__name__)
 
@@ -468,7 +468,6 @@ class VideoComposer:
         """精品模式：按分镜列表逐镜生成视频"""
         aspect_ratio = aspect_ratio or "9:16"
         resolution = resolution or "720p"
-        seedance = create_video_client(seedance_model)
         def report(pct, stage):
             logger.info(f"[{pct*100:.0f}%] {stage}")
             if on_progress:
@@ -560,10 +559,11 @@ class VideoComposer:
             # ── 镜头组首尾帧模式（多段合并） ──
             if clip is None and group_mode == "first_last" and first_frame_url and last_frame_url:
                 try:
-                    seedance_path = asyncio.run(seedance.generate_clip_first_last_frame(
+                    seedance_path = asyncio.run(ShotService().generate_clip(
+                        model=seedance_model,
+                        prompt=seedance_prompt,
                         first_frame_url=first_frame_url,
                         last_frame_url=last_frame_url,
-                        prompt=seedance_prompt or "macro close-up of product, slow push-in with soft studio lighting, subtle product rotation, 50mm lens, cinematic depth of field",
                         aspect_ratio=aspect_ratio,
                         duration_sec=dur,
                         shot_index=i,
@@ -580,9 +580,10 @@ class VideoComposer:
             # Seedance 图生视频，失败回退 Ken Burns
             if clip is None and first_frame_url and first_frame_url.startswith("http"):
                 try:
-                    seedance_path = asyncio.run(seedance.generate_clip_from_url(
+                    seedance_path = asyncio.run(ShotService().generate_clip(
+                        model=seedance_model,
+                        prompt=seedance_prompt,
                         image_url=first_frame_url,
-                        prompt=seedance_prompt or "medium shot of product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens",
                         aspect_ratio=aspect_ratio,
                         duration_sec=dur,
                         shot_index=i,
@@ -599,7 +600,8 @@ class VideoComposer:
             # 纯文生视频：无参考图
             if clip is None and seedance_prompt:
                 try:
-                    seedance_path = asyncio.run(seedance.generate_clip_text_only(
+                    seedance_path = asyncio.run(ShotService().generate_clip(
+                        model=seedance_model,
                         prompt=seedance_prompt,
                         aspect_ratio=aspect_ratio,
                         duration_sec=dur,

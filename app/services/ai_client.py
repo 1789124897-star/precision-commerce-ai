@@ -1,4 +1,4 @@
-"""统一 AI 客户端"""
+"""LLM 统一入口：文本 / 多模态 / 生图（OpenAI 兼容协议）。"""
 
 import asyncio
 import logging
@@ -13,11 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class AIClient:
-    """AI 统一入口。
+    """LLM 统一入口（文本 / 多模态 / 生图）。
 
-    文本 → DeepSeek
-    多模态 → 豆包
-    生图 → Seedream
+    视频生成 → ShotService / VideoComposer
+    语音合成 → TTSEngine
     """
 
     def __init__(self) -> None:
@@ -34,10 +33,10 @@ class AIClient:
         system_prompt: str,
         user_prompt: str,
         image_data_urls: list[str],
-        provider: str = "",
+        model: str = "",
     ) -> str:
-        """多模态：商品图片 + 提示词 → 分析报告文本。provider 空用 .env 配置。"""
-        client = create_multimodal_client(provider)
+        """多模态：商品图片 + 提示词 → 分析报告文本。model 空用 .env 配置。"""
+        client = create_multimodal_client(model)
         return await client.analyze_multimodal(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
