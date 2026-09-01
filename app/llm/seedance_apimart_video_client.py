@@ -1,8 +1,4 @@
-"""APIMart 中转 Seedance 2.0 Mini 视频客户端 — 与 SeedanceService 同接口，仅 API 格式不同。
-
-火山方舟：content 数组 + ratio；APIMart：平铺参数 + size。
-下载/分镜/进度逻辑继承自 SeedanceService，只覆盖 submit_task 与 poll_task。
-"""
+"""APIMart 中转 Seedance 2.0 Mini 视频客户端 """
 import asyncio
 import json
 import logging
@@ -12,13 +8,13 @@ import httpx
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.core.utils import concise_api_error
-from app.llm.seedance_client import SeedanceService
+from app.llm.video_client_base import VideoClientBase
+from app.llm.http import post_with_retry
 
 logger = logging.getLogger(__name__)
 
 
-class ApimartSeedanceClient(SeedanceService):
+class ApimartSeedanceClient(VideoClientBase):
     """Seedance 2.0 Mini 视频生成服务（APIMart 中转）"""
 
     def __init__(self, model: str = ""):
@@ -35,12 +31,13 @@ class ApimartSeedanceClient(SeedanceService):
         last_frame_url: str = "",
         generate_audio: bool = False,
         resolution: str = "720p",
-        model: str = "",  # 忽略外部模型名，固定用自身 model
     ) -> str:
         """提交 APIMart 视频生成任务，返回 task_id。"""
+        if not (prompt or "").strip():
+            raise AppException("缺少场景描述(prompt)，请填写后再生成", 400)
         payload = {
             "model": self.model,
-            "prompt": prompt or "medium shot product on clean surface, smooth orbit camera, rim light from behind, gentle ambient glow, 35mm lens",
+            "prompt": prompt,
             "size": aspect_ratio,
             "duration": int(duration_sec),
             "generate_audio": generate_audio,
@@ -65,30 +62,33 @@ class ApimartSeedanceClient(SeedanceService):
             mode, audio_label, self.model, int(duration_sec), prompt[:60],
         )
 
-        async with httpx.AsyncClient(timeout=60, trust_env=False, proxy=self.proxy) as client:
-            resp = await client.post(
+        try:
+            resp_body = await post_with_retry(
                 settings.APIMART_VIDEO_URL,
-                json=payload,
+                payload,
                 headers={
                     "Authorization": f"Bearer {settings.APIMART_API_KEY}",
                     "Content-Type": "application/json",
                 },
+                timeout=60,
+                max_retries=1, 
+                proxy=self.proxy,
             )
-            if resp.status_code != 200:
-                body = resp.text[:300]
-                logger.error(f"APIMart 提交失败 HTTP {resp.status_code}: {body}")
-                raise AppException(concise_api_error("APIMart", resp.status_code, body), 502)
+        except httpx.HTTPStatusError as e:
+            body = e.response.text[:300]
+            logger.error(f"APIMart 提交失败 HTTP {e.response.status_code}: {body}")
+            raise AppException(f"APIMart 提交失败 HTTP {e.response.status_code}: {body[:120]}", 502) from e
 
-            data = resp.json().get("data") or {}
-            task_id = data[0].get("task_id") if isinstance(data, list) and data else data.get("task_id")
-            if not task_id:
-                logger.error(f"APIMart 响应无 task_id: {resp.text[:300]}")
-                raise AppException(f"APIMart 响应缺少 task_id: {resp.text[:200]}", 502)
-            logger.info(f"APIMart 任务已提交: {task_id}")
-            return task_id
+        data = resp_body.get("data") or {}
+        task_id = data[0].get("task_id") if isinstance(data, list) and data else data.get("task_id")
+        if not task_id:
+            logger.error(f"APIMart 响应无 task_id: {resp_body}")
+            raise AppException("APIMart 响应缺少 task_id", 502)
+        logger.info(f"APIMart 任务已提交: {task_id}")
+        return task_id
 
     async def poll_task(self, task_id: str, poll_interval: float = 5.0, poll_max: int = 60) -> str:
-        """轮询 APIMart 任务状态（pending/processing → completed/failed），返回 video_url。"""
+        """轮询 APIMart 任务状态。"""
         check_url = f"{settings.APIMART_VIDEO_TASK_URL}/{task_id}"
         poll_fails = 0
 
@@ -101,7 +101,6 @@ class ApimartSeedanceClient(SeedanceService):
                         headers={"Authorization": f"Bearer {settings.APIMART_API_KEY}"},
                     )
             except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadError, httpx.RemoteProtocolError) as e:
-                # 代理/网络瞬时抖动不影响任务本身，容忍重试；连续失败才放弃
                 poll_fails += 1
                 if poll_fails >= 5:
                     logger.error(f"APIMart 轮询连续 {poll_fails} 次网络失败，放弃: {e}")
@@ -137,6 +136,6 @@ class ApimartSeedanceClient(SeedanceService):
         raise TimeoutError(f"APIMart 任务超时: {task_id} (轮询 {poll_max} 次)")
 
     async def download_video(self, video_url: str, output_path: Path) -> Path:
-        """下载视频文件（upload.apimart.ai 同样需走代理），失败自动重试并暴露地址。"""
+        """下载视频文件。"""
         logger.info(f"下载视频: {video_url} → {output_path}")
         return await self._download_with_retry(video_url, output_path, proxy=self.proxy)

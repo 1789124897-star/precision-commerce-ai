@@ -25,7 +25,7 @@ class AnalysisService:
         extra: str = "",
         custom_prompt: str = "",
         image_paths: Optional[list[str]] = None,
-        model: str = "",  # 多模态 provider：gpt / doubao / kimi，空用 .env
+        model: str = "",  # 多模态模型名：gpt-* / kimi-* / doubao-*，空用 .env
     ) -> dict:
         """产品分析：图片 + 商品信息 → 分析报告。"""
         image_data_urls = [image_to_data_url(url) for url in image_paths] if image_paths else []
@@ -35,7 +35,7 @@ class AnalysisService:
             system_prompt="你是一名资深电商分析师，请从商品视觉与文本中提炼用户需求、卖点与营销方向。",
             user_prompt=user_prompt,
             image_data_urls=image_data_urls,
-            provider=model,
+            model=model,
         )
         return {"analysis": analysis_text, "product_name": name}
 

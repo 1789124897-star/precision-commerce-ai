@@ -5,37 +5,45 @@ from app.llm.base import BaseImageClient, BaseLLMClient, BaseMultimodalClient, B
 
 
 def create_text_client(model: str = "") -> BaseLLMClient:
-    """纯文本推理客户端。"""
-    provider = settings.TEXT_PROVIDER
-
-    if provider == "deepseek":
-        from app.llm.deepseek_client import DeepSeekClient
+    """纯文本客户端"""
+    if model == "deepseek-v4-pro":
+        from app.llm.deepseek_llm_client import DeepSeekClient
         return DeepSeekClient(model=model)
 
-    raise ValueError(f"不支持的 TEXT_PROVIDER: {provider}，可选: deepseek")
+    if model == "deepseek-v4-flash":
+        from app.llm.deepseek_llm_client import DeepSeekClient
+        return DeepSeekClient(model=model)
+
+    if not model:  # 默认 deepseek-v4-pro
+        from app.llm.deepseek_llm_client import DeepSeekClient
+        return DeepSeekClient(model="deepseek-v4-pro")
+
+    raise ValueError(f"不支持的文本模型: {model}，当前支持: deepseek-v4-pro / deepseek-v4-flash")
 
 
-def create_multimodal_client(provider: str = "") -> BaseMultimodalClient:
-    """多模态分析客户端。"""
-    provider = provider or settings.MULTIMODAL_PROVIDER
-
-    if provider == "doubao":
-        from app.llm.doubao_client import DoubaoClient
-        return DoubaoClient()
-
-    if provider == "kimi":
-        from app.llm.kimi_client import KimiClient
-        return KimiClient()
-
-    if provider == "gpt":
+def create_multimodal_client(model: str = "") -> BaseMultimodalClient:
+    """多模态客户端"""
+    if model == "gpt-5.6-sol":
         from app.llm.gpt_multimodal_client import GptMultimodalClient
         return GptMultimodalClient()
 
-    raise ValueError(f"不支持的 MULTIMODAL_PROVIDER: {provider}，可选: doubao / kimi / gpt")
+    if model == "doubao-1-5-vision-pro-32k-250115":
+        from app.llm.doubao_llm_client import DoubaoClient
+        return DoubaoClient()
+
+    if model == "kimi-k3":
+        from app.llm.kimi_llm_client import KimiClient
+        return KimiClient()
+
+    if not model:  # 默认 gpt-5.6-sol
+        from app.llm.gpt_multimodal_client import GptMultimodalClient
+        return GptMultimodalClient()
+
+    raise ValueError(f"不支持的多模态模型: {model}，当前支持: gpt-5.6-sol / doubao-1-5-vision-pro-32k-250115 / kimi-k3")
 
 
-def create_image_client(model: str) -> BaseImageClient:
-    """按模型名选生图客户端：一一对应，未知模型报错。"""
+def create_image_client(model: str = "") -> BaseImageClient:
+    """生图客户端"""
     if model == "gpt-image-2":
         from app.llm.gpt_image_client import GptImageClient
         return GptImageClient(model=model)
@@ -44,21 +52,25 @@ def create_image_client(model: str) -> BaseImageClient:
         from app.llm.seedream_image_client import SeedreamImageClient
         return SeedreamImageClient(model=model)
 
+    if not model:  # 默认 gpt-image-2
+        from app.llm.gpt_image_client import GptImageClient
+        return GptImageClient(model="gpt-image-2")
+
     raise ValueError(f"不支持的图片模型: {model}，当前支持: gpt-image-2 / doubao-seedream-4-5-251128")
 
 
 def create_video_client(model: str = "") -> BaseVideoClient:
     """视频模型选客户端."""
     if model == "doubao-seedance-1-5-pro-251215":
-        from app.llm.seedance_client import SeedanceService
+        from app.llm.seedance_video_client import SeedanceService
         return SeedanceService()
 
     if model == "doubao-seedance-2-0-mini-260615":
-        from app.llm.seedance_apimart_client import ApimartSeedanceClient
+        from app.llm.seedance_apimart_video_client import ApimartSeedanceClient
         return ApimartSeedanceClient()
 
-    if model:
-        raise ValueError(f"不支持的视频模型: {model}，当前支持 doubao-seedance-1-5-pro-251215 / doubao-seedance-2-0-mini-260615")
+    if not model:  # 默认 doubao-seedance-1-5-pro-251215
+        from app.llm.seedance_video_client import SeedanceService
+        return SeedanceService()
 
-    from app.llm.seedance_client import SeedanceService
-    return SeedanceService()
+    raise ValueError(f"不支持的视频模型: {model}，当前支持 doubao-seedance-1-5-pro-251215 / doubao-seedance-2-0-mini-260615")

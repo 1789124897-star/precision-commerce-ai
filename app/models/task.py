@@ -12,7 +12,7 @@ from app.core.database import Base
 TASK_TYPES = ["scrape", "analysis", "strategy", "image_gen", "script_gen", "tts", "video_compose", "shot_gen"]
 TASK_STATUSES = ["PENDING", "RUNNING", "SUCCESS", "FAILURE"]
 
-# 状态常量 — 供 repo/route 引用，避免硬编码字符串
+# 状态常量
 STATUS_PENDING = "PENDING"
 STATUS_RUNNING = "RUNNING"
 STATUS_SUCCESS = "SUCCESS"

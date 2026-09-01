@@ -20,7 +20,7 @@ async def submit_analysis(
     extra: str = Form(""),
     images: list[UploadFile] = File(default_factory=list),
     custom_prompt: str = Form(""),
-    model: str = Form(""),  # 多模态 provider：gpt / doubao / kimi
+    model: str = Form(""),  # 多模态模型名：gpt-* / kimi-* / doubao-*
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     body = AnalysisSubmitRequest(

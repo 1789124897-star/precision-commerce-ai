@@ -11,7 +11,7 @@ class AnalysisSubmitRequest(BaseModel):
     price: str = Field(min_length=1)
     extra: str = ""
     custom_prompt: str = ""
-    model: str = ""  # 多模态 provider：gpt / doubao / kimi，空用 .env
+    model: str = ""  # 多模态模型名：gpt-5.6-sol / doubao-1-5-vision-pro-32k-250115 / kimi-k3，空用默认
 
 
 class StrategyRequest(BaseModel):

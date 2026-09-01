@@ -14,10 +14,6 @@ class Settings(BaseSettings):
     DOUBAO_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
     DOUBAO_MODEL: str = ""
 
-    # LLM Provider 切换
-    TEXT_PROVIDER: str = "deepseek"
-    MULTIMODAL_PROVIDER: str = "doubao"
-
     # Kimi K3 — 多模态
     KIMI_API_KEY: str = ""
     KIMI_BASE_URL: str = "https://api.moonshot.cn/v1/chat/completions"

@@ -42,7 +42,7 @@ class DeepSeekClient(BaseLLMClient):
         temperature: float = 0.6,
         max_tokens: int = 8192,
     ) -> dict[str, Any]:
-        """开启 DeepSeek 原生 JSON 模式，直接返回 dict。"""
+        """DeepSeek 原生 JSON 模式，返回 dict。"""
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": [
