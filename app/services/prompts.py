@@ -208,34 +208,17 @@ type 顺序：{type_hint}"""
 
 
 def build_shot_scene_prompt(voiceovers: list[str]) -> str:
-    """根据分组后的口播文案生成双语场景描述（zh 给前端，en 给 Seedance）。"""
+    """根据分组后的口播文案生成中文场景描述。"""
     items = "\n".join(f"镜{i+1}：{v}" for i, v in enumerate(voiceovers))
     return f"""你是资深电商广告导演。根据每组口播文案，为 Seedance AI 视频生成工具撰写详尽场景描述。
 
 各组口播：
 {items}
 
-每个镜头同时输出中文版和英文版：
-
-- zh：中文场景描述，50-80 字，包含：
-  画面构图（特写/中景/全景）、运镜方式、灯光氛围、产品与环境的互动细节。
-  示例："微距特写，镜头从杯口缓慢推入，暖色顶光勾勒不锈钢内胆的拉丝纹理，"
-         "蒸腾的水雾在逆光下呈现淡金色，背景虚化为柔和的厨房暖光。"
-
-- en：英文 Seedance prompt，60-100 词，必须包含以下全部要素：
-  · shot size：extreme closeup / macro / medium shot / wide
-  · 焦段：85mm / 50mm / 35mm / 24mm
-  · camera movement：slow push-in / dolly right to left / crane up reveal / arc orbit
-  · lighting：key light 方位+色温、rim light、soft fill、practical light
-  · color palette：warm amber tones / cool teal shadows / golden hour / high contrast
-  · texture detail：材质纹理、反光、阴影、背景虚化程度
-  · action：产品正在发生的动作（水流、转动、光线变化、蒸汽升腾）
-
-  示例："Macro close-up on 85mm lens, slow push-in from cup rim traveling downward. "
-        "Warm key light at 45 degrees rakes across brushed stainless steel surface, "
-        "revealing fine circular polishing lines. Rim light from behind creates a "
-        "thin golden edge glow. Steam rises gently, catching backlight with soft "
-        "diffusion. Background dissolves into creamy bokeh of warm kitchen ambient."
+每个镜头输出中文场景描述（zh），50-80 字，包含：
+- 画面构图（特写/中景/全景）、运镜方式、灯光氛围、产品与环境的互动细节。
+- 示例："微距特写，镜头从杯口缓慢推入，暖色顶光勾勒不锈钢内胆的拉丝纹理，"
+        "蒸腾的水雾在逆光下呈现淡金色，背景虚化为柔和的厨房暖光。"
 
 ━━━ 拍摄手法指南 ━━━
 - 材质/做工展示：macro lens + extreme closeup + ultra-slow dolly push + rake light 打出纹理
@@ -247,4 +230,4 @@ def build_shot_scene_prompt(voiceovers: list[str]) -> str:
 每个镜头的描述必须有独一无二的画面细节，不能相互雷同。
 
 只输出 JSON：
-{{"scenes":[{{"zh":"中文描述","en":"English prompt"}}, ...]}}"""
+{{"scenes":[{{"zh":"中文描述"}}, ...]}}"""

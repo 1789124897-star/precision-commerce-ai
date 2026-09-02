@@ -155,13 +155,11 @@ async def _fill_scene_prompts(groups: list[ShotGroup]) -> None:
         scene_prompts = await AIGateway().generate_shot_scenes(voiceovers=voiceovers)
         for shot, sp in zip(groups, scene_prompts):
             shot.scene_prompt = sp.get("zh", "")
-            shot.scene_prompt_en = sp.get("en", "")
         logger.info(f"TTS 镜头场景描述生成完成: {len(scene_prompts)} 组")
     except (AppException, ValueError, KeyError, ConnectionError, TimeoutError) as e:
         logger.warning(f"TTS 镜头场景描述生成失败，使用空占位: {e}")
         for shot in groups:
             shot.scene_prompt = ""
-            shot.scene_prompt_en = ""
 
 
 async def _synthesize_with_words(

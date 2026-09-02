@@ -16,11 +16,9 @@ class ShotGroup:
     voiceover: str
     duration_sec: float          # Seedance 视频时长（取整后）
     srt_duration_sec: float      # 实际口播时长
-    merged_count: int
     first_frame_url: str = ""
     last_frame_url: str = ""
     scene_prompt: str = ""
-    scene_prompt_en: str = ""
 
 
 class ShotGrouper:
@@ -68,7 +66,6 @@ def _build_group(texts: list[str], buf_dur: float) -> ShotGroup:
         voiceover="".join(texts),
         duration_sec=int(video_dur),
         srt_duration_sec=round(buf_dur, 1),
-        merged_count=len(texts),
     )
     logger.info(f"封组: {len(texts)}段 TTS {buf_dur:.1f}s → {int(video_dur)}s")
     return group
@@ -83,4 +80,3 @@ def _merge_tail(group: ShotGroup, texts: list[str], dur: float) -> None:
     group.voiceover += "".join(texts)
     group.srt_duration_sec = round(tts_total, 1)
     group.duration_sec = int(video_dur)
-    group.merged_count += len(texts)

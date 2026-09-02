@@ -16,7 +16,6 @@ const S = {
 
   // 视频
   scriptTaskId: null,
-  scriptPath: null,
   vidScriptSegments: null,   // 口播分段数据，用于精铺模式分镜叠加文案
   audioPath: null,
   srtPath: null,
@@ -612,14 +611,13 @@ async function doGenScript() {
     const taskId = data.data.task_id;
     S.scriptTaskId = taskId;
     poll8000(taskId, (result) => {
-      S.scriptPath = result.script_path;
-      S.vidScriptSegments = result.script.segments;
-      document.getElementById('vidScript').value = result.script.segments.map((s, i) => {
+      S.vidScriptSegments = result.segments;
+      document.getElementById('vidScript').value = result.segments.map((s, i) => {
         return `[镜${i + 1} ${s.type}]\n📢 ${s.voiceover}`;
       }).join('\n\n');
       // 自动填充配音文本：提取所有口播片段合并为纯文本
-      document.getElementById('vidTtsText').value = result.script.segments.map(s => s.voiceover).join('\n');
-      showS('vidScriptStatus', 'success', `已填充 · ${result.script.total_words} 字 · ${result.script.segments.length} 段`);
+      document.getElementById('vidTtsText').value = result.segments.map(s => s.voiceover).join('\n');
+      showS('vidScriptStatus', 'success', `已填充 · ${result.total_words} 字 · ${result.segments.length} 段`);
       btn.disabled = false; btn.textContent = '🤖 AI生成';
     }, (error) => {
       showS('vidScriptStatus', 'error', `生成失败: ${error}`);

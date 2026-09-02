@@ -10,11 +10,10 @@ VIDEO_DIR = OUTPUT_DIR / "videos"
 AUDIO_DIR = OUTPUT_DIR / "audio"
 IMAGE_DIR = OUTPUT_DIR / "images"
 UPLOAD_DIR = OUTPUT_DIR / "uploads"
-SCRIPTS_DIR = OUTPUT_DIR / "scripts"
 
 SCRAPER_CONFIG = _PROJECT_ROOT / "app" / "config" / "scraper_config.yaml"
 
-for d in (VIDEO_DIR, AUDIO_DIR, IMAGE_DIR, UPLOAD_DIR, SCRIPTS_DIR):
+for d in (VIDEO_DIR, AUDIO_DIR, IMAGE_DIR, UPLOAD_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 

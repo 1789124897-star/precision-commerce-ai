@@ -1,10 +1,10 @@
 """视频合成公共实现：字幕渲染 / 画幅解析 / 质量检查 / 编码日志。"""
 import logging
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 from moviepy import ImageClip
 from PIL import Image, ImageDraw, ImageFont
 from proglog import ProgressBarLogger
@@ -141,7 +141,7 @@ class VideoComposerBase:
         shadow = max(2, int(font_size * 0.04))
 
         clips = []
-        for idx, (start_sec, end_sec, text) in enumerate(subtitles):
+        for start_sec, end_sec, text in subtitles:
             duration = end_sec - start_sec
             if duration <= 0.1:
                 continue
@@ -151,11 +151,7 @@ class VideoComposerBase:
             if img is None:
                 continue
 
-            # 每条字幕用独立临时文件
-            tmp = Path(tempfile.gettempdir()) / f"video_sub_{idx}.png"
-            img.save(str(tmp))
-
-            sub_clip = ImageClip(str(tmp), duration=duration)
+            sub_clip = ImageClip(np.array(img), duration=duration)
             # 字幕垂直位置：不同宽高比适配不同平台底部 UI
             if w < h:
                 # 竖屏 9:16 → 抖音，留 18%

@@ -4,8 +4,6 @@ import logging
 from typing import Any
 
 from app.core.exceptions import AppException
-from app.core.paths import SCRIPTS_DIR
-from app.core.utils import save_json
 from app.services.ai_gateway import AIGateway
 from app.services.prompts import build_product_script_prompt
 
@@ -23,7 +21,6 @@ class ScriptGenerator:
         content: str,
         target_segments: int = 8,
         system_prompt: str = "",
-        task_id: str = "",
     ) -> dict:
 
         system_prompt = system_prompt or (
@@ -40,11 +37,7 @@ class ScriptGenerator:
         segments = raw.get("segments", [])
         if not segments:
             raise AppException("AI 返回的 segments 为空")
-        result = self._build_result(segments)
-
-        # 保存脚本文件
-        script_path = self._save(task_id=task_id, result=result)
-        return {"script": result, "script_path": script_path}
+        return self._build_result(segments)
 
     def run_sync(self, **kwargs: Any) -> dict:
         """同步包装，供 Celery 任务调用"""
@@ -68,12 +61,3 @@ class ScriptGenerator:
             "full_text": full_text,
             "total_words": word_count,
         }
-
-    # ── 文件 I/O ──
-
-    @staticmethod
-    def _save(task_id: str, result: dict) -> str:
-        """保存脚本 JSON 文件，返回路径。"""
-        filepath = SCRIPTS_DIR / task_id / "script.json"
-        save_json(filepath, result)
-        return str(filepath)

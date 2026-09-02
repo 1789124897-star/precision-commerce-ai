@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.llm.base import BaseLLMClient, BaseMultimodalClient
+from app.llm.base import BaseLLMClient
 from app.llm.factory import create_image_client, create_multimodal_client, create_text_client
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,6 @@ class AIGateway:
 
     def __init__(self) -> None:
         self._text_client: BaseLLMClient = create_text_client()
-        self._multimodal_client: BaseMultimodalClient = create_multimodal_client()
 
     # 多模态分析
     async def analyze_product(
@@ -74,12 +73,9 @@ class AIGateway:
         normalized: list[dict] = []
         for s in scenes:
             if isinstance(s, str):
-                normalized.append({"zh": s, "en": s})
+                normalized.append({"zh": s})
             else:
-                normalized.append({
-                    "zh": s.get("zh", ""),
-                    "en": s.get("en", s.get("zh", "")),
-                })
+                normalized.append({"zh": s.get("zh", "")})
         if len(normalized) != len(voiceovers):
             raise AppException(
                 f"AI 场景描述数量不匹配: 期望 {len(voiceovers)} 组，实际 {len(normalized)} 组"
