@@ -1,7 +1,6 @@
 """通用工具函数"""
 import base64
 import json
-import re
 import shutil
 import uuid
 from pathlib import Path
@@ -19,8 +18,6 @@ _MIME_MAP: dict[str, str] = {
     ".gif": "image/gif",
     ".bmp": "image/bmp",
 }
-
-_FILENAME_ILLEGAL_RE = re.compile(r'[\\/:*?"<>|]')
 
 
 def concise_api_error(service: str, status_code: int, body: str) -> str:
@@ -55,7 +52,7 @@ def image_to_data_url(filepath: str) -> str:
 
 
 def save_upload(file: UploadFile, prefix: str) -> str:
-    """保存上传文件到 uploads 目录，返回访问路径。"""
+    """保存上传文件到 uploads 目录。"""
     suffix = Path(file.filename or "unknown").suffix
     filename = f"{prefix}_{uuid.uuid4().hex[:8]}{suffix}"
     filepath = UPLOAD_DIR / filename
@@ -63,11 +60,6 @@ def save_upload(file: UploadFile, prefix: str) -> str:
     with filepath.open("wb") as f:
         shutil.copyfileobj(file.file, f)
     return f"/output/uploads/{filename}"
-
-
-def sanitize_filename(name: str) -> str:
-    """替换文件名中的非法字符为下划线。"""
-    return _FILENAME_ILLEGAL_RE.sub("_", name)
 
 
 def save_json(path: Path, data: object) -> None:

@@ -13,7 +13,7 @@ from DrissionPage import ChromiumOptions, ChromiumPage
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.core.paths import IMAGE_DIR, SCRAPER_CONFIG
-from app.core.utils import sanitize_filename, save_json
+from app.core.utils import save_json
 from app.services.anti_crawl import (
     ensure_fresh_cookies,
     load_cookies,
@@ -28,6 +28,12 @@ with open(SCRAPER_CONFIG, encoding="utf-8") as f:
     SCRAPER_CFG = yaml.safe_load(f)
 
 _IMG_PREFIX = {"main": "主图", "sku": "SKU", "detail": "详情图"}
+
+_FILENAME_ILLEGAL_RE = re.compile(r'[\\/:*?"<>|]')
+
+
+def _sanitize_filename(name: str) -> str:
+    return _FILENAME_ILLEGAL_RE.sub("_", name)
 
 
 class ImageScraper:
@@ -88,7 +94,7 @@ class ImageScraper:
 
             page.get(product_url)
             random_delay()
-            product_name = self._parse_title(page.title or "")
+            product_name = self._wait_valid_title(page)
 
             version = self._detect_version(page)
             logger.info("页面: %s | 版本: %s", product_name, version.upper())
@@ -113,15 +119,26 @@ class ImageScraper:
 
     @staticmethod
     def _parse_title(title: str) -> str:
-        """从 1688 页面标题中提取商品名。"""
         for sep in ("-阿里巴巴", "- 阿里巴巴", "-1688", "- 1688", "| 1688"):
             if sep in title:
                 return title.split(sep)[0].strip()
         return title
 
     @staticmethod
+    def _is_blocked_title(title: str) -> bool:
+        return any(k in title for k in ("验证码", "安全验证", "登录", "滑块"))
+
+    def _wait_valid_title(self, page, retries: int = 3) -> str:
+        for attempt in range(retries):
+            raw_title = page.title or ""
+            if raw_title and not self._is_blocked_title(raw_title):
+                return self._parse_title(raw_title)
+            logger.warning("标题未就绪(%s)，重读 %d/%d", raw_title, attempt + 1, retries)
+            random_delay(2.0, 3.0)
+        raise AppException("页面疑似被验证码/登录拦截，多次重读标题无效")
+
+    @staticmethod
     def _detect_version(page) -> str:
-        """根据页面元素命中情况判断 1688 页面版本。"""
         for v in ("v3", "v2"):
             if page.ele(SCRAPER_CFG["selectors"][v]["main_image"]):
                 return v
@@ -130,7 +147,7 @@ class ImageScraper:
     # ── 图片下载 ──────────────────────────────────────────
 
     def _download_images(self, page, task_dir: Path, version: str, selector_key: str, category: str) -> None:
-        """下载主图/详情图（按选择器取元素 → 提取 URL → 去重 → 下载）。"""
+        """下载主图/详情图"""
         cfg = SCRAPER_CFG["selectors"][version]
         elements = page.eles(cfg[selector_key])
         attrs = ("src", "data-lazyload-src") if version == "v1" else ("src",)
@@ -153,7 +170,7 @@ class ImageScraper:
                 logger.warning("%s_%d 处理异常", prefix, idx, exc_info=True)
 
     def _download_sku_images(self, page, task_dir: Path, version: str) -> None:
-        """下载 SKU 变体图（URL 可能来自背景图，需提取标签，去除 _sum 后缀）。"""
+        """下载 SKU 图"""
         cfg = SCRAPER_CFG["selectors"][version]
         nodes = page.eles(cfg["sku_image"])
         prefix = _IMG_PREFIX["sku"]
@@ -170,7 +187,7 @@ class ImageScraper:
 
                 label = self._extract_sku_label(node, cfg)
                 safe_label = (
-                    sanitize_filename(label) if label else str(idx)
+                    _sanitize_filename(label) if label else str(idx)
                 )
                 filename = f"{prefix}_{idx}_{safe_label}.jpg"
                 if self._download(url, task_dir, filename):
@@ -211,11 +228,10 @@ class ImageScraper:
         except Exception:
             logger.warning("滚动异常，跳过", exc_info=True)
 
-    # ── 底层：单张下载 & 工具 ──────────────────────────────
 
     def _download(self, url: str, save_dir: Path, filename: str) -> bool:
         """下载单张图片，过滤过小/非图片响应。"""
-        filename = sanitize_filename(filename)
+        filename = _sanitize_filename(filename)
         try:
             proxy = self._proxy
             proxies = {"http": proxy, "https": proxy} if proxy else {"http": "", "https": ""}

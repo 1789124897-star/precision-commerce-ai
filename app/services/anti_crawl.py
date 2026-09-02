@@ -1,7 +1,6 @@
-"""1688 反爬工具集 —— 随机延迟 + 指数退避重试 + Cookie 持久化，可作库或直接运行刷新 cookie。"""
+"""1688 反爬工具集 —— 随机延迟 + 指数退避重试 + Cookie 持久化。"""
 import json
 import logging
-import os
 import random
 import time
 
@@ -14,12 +13,10 @@ _MAX_AGE_HOURS = 12
 
 
 def random_delay(min_s=2.0, max_s=3.5):
-    """随机等待，模拟人类操作间隔。"""
     time.sleep(random.uniform(min_s, max_s))
 
 
 def has_valid_cookies(cookie_file=None):
-    """cookie 文件 12 小时内未修改则有效。"""
     path = cookie_file or _COOKIE_FILE
     if not os.path.exists(str(path)):
         return False
@@ -28,7 +25,6 @@ def has_valid_cookies(cookie_file=None):
 
 
 def save_cookies(page, cookie_file=None):
-    """把当前浏览器的 cookie 保存到文件。"""
     path = cookie_file or _COOKIE_FILE
     cookies = page.cookies()
     with open(str(path), "w", encoding="utf-8") as f:
@@ -37,7 +33,6 @@ def save_cookies(page, cookie_file=None):
 
 
 def load_cookies(page, cookie_file=None):
-    """有效则把 cookie 注入页面，返回是否成功。"""
     path = cookie_file or _COOKIE_FILE
     if not has_valid_cookies(path):
         return False
@@ -53,7 +48,6 @@ def load_cookies(page, cookie_file=None):
 
 
 def ensure_fresh_cookies(page, email="", password=""):
-    """cookie 过期则打开登录页刷新 cookie 文件（有账密顺手登录）。"""
     if has_valid_cookies():
         return
 
@@ -68,7 +62,6 @@ def ensure_fresh_cookies(page, email="", password=""):
 
 
 def _try_login(page, email, password):
-    """试着用账密登录 1688，失败不报错。"""
     try:
         tab = page.ele("text:密码登录") or page.ele("div:contains(密码登录)")
         if tab:
@@ -105,32 +98,3 @@ def _try_login(page, email, password):
         logger.info("1688 登录成功")
     except Exception:
         logger.warning("登录可能需要验证码，cookie 照存")
-
-
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-    from DrissionPage import ChromiumOptions, ChromiumPage
-
-    load_dotenv()
-
-    EMAIL = os.getenv("ALIBABA_1688_EMAIL", "")
-    PASSWORD = os.getenv("ALIBABA_1688_PASSWORD", "")
-
-    if has_valid_cookies():
-        print("Cookie 仍有效，跳过刷新")
-        exit(0)
-
-    print("Cookie 过期或不存在，开始刷新...")
-
-    co = ChromiumOptions()
-    co.headless(True)
-    co.set_browser_path(os.getenv(
-        "EDGE_PATH",
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-    ))
-    page = ChromiumPage(co)
-
-    try:
-        ensure_fresh_cookies(page, EMAIL, PASSWORD)
-    finally:
-        page.quit()
