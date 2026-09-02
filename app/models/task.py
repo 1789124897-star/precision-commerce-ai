@@ -17,6 +17,8 @@ STATUS_PENDING = "PENDING"
 STATUS_RUNNING = "RUNNING"
 STATUS_SUCCESS = "SUCCESS"
 STATUS_FAILURE = "FAILURE"
+# 仅作为 Celery 任务返回值标记（任务记录不存在），不属于 TASK_STATUSES 数据库状态
+STATUS_NOT_FOUND = "NOT_FOUND"
 
 
 def gen_task_id() -> str:

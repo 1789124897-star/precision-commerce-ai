@@ -5,7 +5,7 @@ from app.core.celery_app import celery_app
 from app.core.database import SyncSession
 from app.core.exceptions import AppException
 from app.models import Strategy
-from app.models.task import STATUS_SUCCESS
+from app.models.task import STATUS_FAILURE, STATUS_NOT_FOUND, STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
 from app.services.analysis_service import AnalysisService
 
@@ -31,7 +31,7 @@ def generate_strategies_task(self, task_id: str):
         task = TaskRepo.set_running(db, task_id, self.request.id)
         if not task:
             logger.error("任务不存在 task_id=%s", task_id)
-            return {"task_id": task_id, "status": "NOT_FOUND"}
+            return {"task_id": task_id, "status": STATUS_NOT_FOUND}
         request_json = task.request_json or {}
         parent_task_id = task.parent_task_id or ""
         db.commit()
@@ -43,7 +43,7 @@ def generate_strategies_task(self, task_id: str):
         with SyncSession() as db:
             TaskRepo.set_failure(db, task_id, e.message)
             db.commit()
-        return {"task_id": task_id, "status": "FAILURE"}
+        return {"task_id": task_id, "status": STATUS_FAILURE}
     except Exception as e:
         logger.exception("失败 task_id=%s", task_id)
         with SyncSession() as db:

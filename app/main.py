@@ -29,10 +29,10 @@ async def lifespan(app: FastAPI):
     from sqlalchemy import update
 
     from app.core.database import SyncSession
-    from app.models.task import STATUS_FAILURE, Task
+    from app.models.task import STATUS_FAILURE, STATUS_RUNNING, Task
     with SyncSession() as db:
         db.execute(
-            update(Task).where(Task.status == "RUNNING").values(
+            update(Task).where(Task.status == STATUS_RUNNING).values(
                 status=STATUS_FAILURE,
                 error_message="服务重启，任务被中断",
             )
