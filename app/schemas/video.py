@@ -1,8 +1,12 @@
 ﻿""" Video Pydantic 模型 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+
+# 导出分辨率白名单：与 services/video_composer.py 的短边映射 key 保持一致
+VideoResolution = Literal["480p", "720p", "1080p"]
 
 
 class GenerateScriptRequest(BaseModel):
@@ -24,7 +28,7 @@ class ComposeVideoRequest(BaseModel):
     audio_path: str
     srt_path: str
     aspect_ratio: str = "9:16"
-    resolution: str = "720p"
+    resolution: VideoResolution
     transition: str = "fade"
     quality_check: bool = True
     parent_task_id: Optional[str] = None  
@@ -51,7 +55,7 @@ class GenerateShotRequest(BaseModel):
     duration_sec: float = 4.0
     aspect_ratio: str = "9:16"
     generate_audio: bool = False  # 是否有声
-    resolution: str = "720p"
+    resolution: VideoResolution
     shot_index: int = 0
     video_model: str = ""   
     parent_task_id: Optional[str] = None 

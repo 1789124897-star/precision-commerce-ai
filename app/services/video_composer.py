@@ -40,19 +40,16 @@ class VideoComposerBase:
                         on_progress(round(pct, 3), f"编码中 {value}/{self.total_frames} 帧")
         return _EncodeLogger()
 
-    def _parse_aspect(self, ratio: str, resolution: str = "720p") -> tuple[int, int]:
-        """宽高比 + 分辨率 → (w, h)"""
-        base_map = {"480p": 480, "720p": 720, "1080p": 1080}
-        short = base_map.get(resolution, 720)
-        parts = ratio.replace(":", "/").split("/")
-        if len(parts) != 2:
-            return (short, int(short * 16 / 9))  # 默认竖屏
-        r = int(parts[0]) / int(parts[1])
+    def _parse_aspect(self, ratio: str, resolution: str) -> tuple[int, int]:
+        short = {"480p": 480, "720p": 720, "1080p": 1080}[resolution]
+        try:
+            w, h = (int(p) for p in ratio.replace(":", "/").split("/"))
+            r = w / h
+        except (ValueError, ZeroDivisionError):
+            return (short, int(short * 16 / 9))
         if r > 1:
-            # 横屏：高为短边
             return (int(short * r), short)
         if r < 1:
-            # 竖屏：宽为短边
             return (short, int(short / r))
         return (short, short)
 
@@ -139,10 +136,8 @@ class VideoComposerBase:
         if not subtitles:
             return []
 
-        # 字号：短边的 7.8%
         font_size = int(min(w, h) * 0.078)
         font = self._load_font(font_size)
-        # 阴影：字号 4%，至少 2px
         shadow = max(2, int(font_size * 0.04))
 
         clips = []
@@ -163,7 +158,7 @@ class VideoComposerBase:
             sub_clip = ImageClip(str(tmp), duration=duration)
             # 字幕垂直位置：不同宽高比适配不同平台底部 UI
             if w < h:
-                # 竖屏 9:16 → 抖音，留 18% 
+                # 竖屏 9:16 → 抖音，留 18%
                 y_pos = int(h * 0.82)
             elif w > h:
                 # 横屏 16:9 → YouTube，留 12%

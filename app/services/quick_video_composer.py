@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class QuickVideoComposer(VideoComposerBase):
-    """快速模式合成器：图片 Ken Burns 动画（不调用 AI）。"""
+    """快速模式合成器。"""
 
     def compose(
         self,
@@ -37,11 +37,6 @@ class QuickVideoComposer(VideoComposerBase):
         quality_check: bool = True,
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> dict:
-        """快速模式：图片 + 音频 + 字幕 → MP4
-
-        on_progress: 进度回调 (0~1, stage_text)
-        返回: {"video_path", "duration_sec", "quality"}
-        """
         aspect_ratio = aspect_ratio or "9:16"
         resolution = resolution or "720p"
         def report(pct, stage):
@@ -49,16 +44,22 @@ class QuickVideoComposer(VideoComposerBase):
             if on_progress:
                 on_progress(pct, stage)
 
-        # 解析宽高比
+        # 1. 解析宽高比
         w, h = self._parse_aspect(aspect_ratio, resolution)
         report(0.0, f"加载 {len(images)} 张图片...")
 
-        # 下载/加载图片
-        image_paths = self._load_local_images(images)
+        # 2. 加载图片（跳过不存在的，全部无效则报错）
+        image_paths = []
+        for url in images:
+            local = from_output_url(url)
+            if local.exists():
+                image_paths.append(local)
+            else:
+                logger.warning(f"图片不存在，跳过: {local}")
         if not image_paths:
             raise AppException("没有可用的图片素材", 400)
 
-        # 加载音频
+        # 3. 加载音频
         report(0.05, "加载音频...")
         if audio_path:
             audio_local = from_output_url(audio_path)
@@ -66,26 +67,22 @@ class QuickVideoComposer(VideoComposerBase):
             total_duration = audio.duration
             has_audio = True
         else:
-            # 无音频：每张图 2s
             total_duration = len(image_paths) * 2.0
             audio = None
             has_audio = False
             logger.info(f"无音频，静音视频 · {len(image_paths)} 张图 × 2s = {total_duration:.1f}s")
 
-        # 每张图最多 6s，不够就循环
         MAX_PER_IMG = 6.0
         candidate = total_duration / len(image_paths)
         if candidate > MAX_PER_IMG:
-            # 图不够 → 循环
             per_img = MAX_PER_IMG
             loop_images = True
         else:
-            # 图够多 → 均分
             per_img = candidate
             loop_images = False
         logger.info(f"音频 {total_duration:.1f}s, {len(image_paths)} 张图, 每张 {per_img:.1f}s, 循环={loop_images}")
 
-        # 逐图生成 Ken Burns 动画
+        # 4. 逐图生成 Ken Burns 动画
         report(0.1, f"生成动画 (每张 {per_img:.1f}s)...")
         clips: list = []
         remaining = total_duration
@@ -103,13 +100,13 @@ class QuickVideoComposer(VideoComposerBase):
             else:
                 report(0.1 + 0.6 * (1 - remaining / total_duration), f"动画 {img_idx}/{len(image_paths)}")
 
-        # 拼接视频
+        # 5. 拼接视频
         report(0.7, "拼接音画...")
         video = concatenate_videoclips(clips, method="compose")
         if has_audio:
             video = video.with_audio(audio)
 
-        # 叠加字幕
+        # 6. 叠加字幕
         if srt_path:
             local_srt = from_output_url(srt_path)
             logger.info(f"字幕路径: raw={srt_path!r} local={local_srt} exists={local_srt.exists()}")
@@ -124,7 +121,7 @@ class QuickVideoComposer(VideoComposerBase):
             except Exception as e:
                 logger.warning(f"字幕叠加失败，跳过: {e}")
 
-        # 编码导出
+        # 7. 编码导出
         out_name = f"{task_id}.mp4"
         out_path = VIDEO_DIR / out_name
         report(0.85, "正在编码视频...")
@@ -157,17 +154,6 @@ class QuickVideoComposer(VideoComposerBase):
             quality = self._check_quality(out_path, total_duration)
 
         return {"video_path": video_url, "duration_sec": round(total_duration, 1), "quality": quality}
-
-    def _load_local_images(self, urls: list[str]) -> list[Path]:
-        """URL → 本地路径，不存在的跳过"""
-        result = []
-        for url in urls:
-            local = from_output_url(url)
-            if local.exists():
-                result.append(local)
-            else:
-                logger.warning(f"图片不存在，跳过: {local}")
-        return result
 
     def _ken_burns_clip(self, img_path: Path, w: int, h: int, duration: float) -> VideoClip:
         """模糊背景 + Ken Burns 缩放动画"""
@@ -219,5 +205,4 @@ class QuickVideoComposer(VideoComposerBase):
                 lambda c: c.with_effects([vfx.CrossFadeIn(0.4)]),
             ])
             return t(clip)
-        # fade 或未知 → 默认淡入
         return clip.with_effects([vfx.FadeIn(0.3)])
