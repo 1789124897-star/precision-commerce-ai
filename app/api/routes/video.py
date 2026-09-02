@@ -101,8 +101,6 @@ async def compose_premium(body: ComposePremiumRequest, db: AsyncSession = Depend
             "shots": [s.model_dump() for s in body.shots],
             "audio_path": body.audio_path,
             "srt_path": body.srt_path,
-            "aspect_ratio": body.aspect_ratio,
-            "resolution": body.resolution,
         },
         celery_task=compose_premium_video_task,
         parent_task_id=body.parent_task_id,

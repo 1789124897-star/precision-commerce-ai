@@ -31,17 +31,14 @@ class ComposeVideoRequest(BaseModel):
 
 
 class ShotSchema(BaseModel):
-    """合成镜头：已生成的视频 + 时长（合成只拼装，不再做 AI 生成）"""
     duration_sec: float = 5.0
     clip_path: str = "" 
 
 
 class ComposePremiumRequest(BaseModel):
     shots: list[ShotSchema]
-    audio_path: str
+    audio_path: str = ""
     srt_path: str = ""
-    aspect_ratio: str = "9:16"
-    resolution: str = "720p"
     parent_task_id: Optional[str] = None 
 
 

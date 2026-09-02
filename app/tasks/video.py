@@ -145,8 +145,6 @@ def compose_premium_video_task(self, task_id: str):
                     srt_path=request_json.get("srt_path", ""),
                     output_path=result.get("video_path", ""),
                     duration_sec=result.get("duration_sec", 0),
-                    aspect_ratio=request_json.get("aspect_ratio", "9:16"),
-                    resolution=request_json.get("resolution", ""),
                 )
             )
         db.commit()
