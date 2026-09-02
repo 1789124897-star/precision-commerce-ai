@@ -37,7 +37,15 @@ async def submit_analysis(
     task = await TaskService.create_and_dispatch(
         db,
         task_type=TASK_TYPE_ANALYSIS,
-        request_json={**body.model_dump(), "image_paths": image_paths},
+        request_json={
+            "name": body.name,
+            "function": body.function,
+            "price": body.price,
+            "extra": body.extra,
+            "custom_prompt": body.custom_prompt,
+            "model": body.model,
+            "image_paths": image_paths,
+        },
         celery_task=analyze_product_task,
     )
     return {"data": {"task_id": task.task_id, "task_type": "analysis"}, "message": "ok"}
@@ -48,7 +56,11 @@ async def do_submit_strategies(body: StrategyRequest, db: AsyncSession = Depends
     task = await TaskService.create_and_dispatch(
         db,
         task_type=TASK_TYPE_STRATEGY,
-        request_json={"analysis": body.analysis, "system_prompt": body.system_prompt, "model": body.model},
+        request_json={
+            "analysis": body.analysis, 
+            "system_prompt": body.system_prompt, 
+            "model": body.model,
+        },
         celery_task=generate_strategies_task,
         parent_task_id=body.parent_task_id,
     )

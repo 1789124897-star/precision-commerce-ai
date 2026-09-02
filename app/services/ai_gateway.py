@@ -1,4 +1,4 @@
-"""LLM 统一入口：文本 / 多模态 / 生图（OpenAI 兼容协议）。"""
+"""LLM 统一入口：文本 / 多模态 / 生图"""
 
 import asyncio
 import logging
@@ -13,20 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 class AIGateway:
-    """LLM 统一入口（文本 / 多模态 / 生图）。
-
-    视频生成 → ShotService / QuickVideoComposer / PremiumVideoComposer
-    语音合成 → TTSEngine
-    """
 
     def __init__(self) -> None:
         self._text_client: BaseLLMClient = create_text_client()
         self._multimodal_client: BaseMultimodalClient = create_multimodal_client()
 
-    # ==================================================================
-    # 多模态分析 → 豆包
-    # ==================================================================
-
+    # 多模态分析
     async def analyze_product(
         self,
         *,
@@ -35,7 +27,6 @@ class AIGateway:
         image_data_urls: list[str],
         model: str = "",
     ) -> str:
-        """多模态：商品图片 + 提示词 → 分析报告文本。model 空用 .env 配置。"""
         client = create_multimodal_client(model)
         return await client.analyze_multimodal(
             system_prompt=system_prompt,
@@ -43,12 +34,8 @@ class AIGateway:
             image_data_urls=image_data_urls,
         )
 
-    # ==================================================================
-    # 纯文本推理 → DeepSeek
-    # ==================================================================
-
+    # DeepSeek
     async def generate_strategy(self, *, prompt: str, model: str = "") -> dict[str, Any]:
-        """策略提示词 → JSON 策略结果。model 空用 .env 配置。"""
         client = create_text_client(model)
         return await client.generate_json(
             system_prompt="你是一名资深电商策略师，只返回合法 JSON，输出必须使用简体中文。",
@@ -57,8 +44,8 @@ class AIGateway:
             max_tokens=8192,
         )
 
+    # 口播脚本
     async def generate_script(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
-        """口播脚本：系统提示词 + 用户提示词 → JSON 脚本。"""
         return await self._text_client.generate_json(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -66,8 +53,9 @@ class AIGateway:
             max_tokens=2048,
         )
 
+    # 镜头场景
     async def generate_shot_scenes(self, *, voiceovers: list[str]) -> list[dict]:
-        """每组口播文案 → 双语镜头场景描述。"""
+
         from app.services.prompts import build_shot_scene_prompt
 
         prompt = build_shot_scene_prompt(voiceovers)
@@ -98,7 +86,7 @@ class AIGateway:
             )
         return normalized
 
-    # 图片生成 → Seedream
+    # 图片生成
     async def generate_images(
         self,
         *,
@@ -108,7 +96,6 @@ class AIGateway:
         model: str = "",
     ) -> list[dict[str, Any]]:
 
-        """并发生图，Semaphore 限流，按模型走 factory 客户端。"""
         semaphore = asyncio.Semaphore(settings.IMAGE_MAX_CONCURRENT)
         image_client = create_image_client(model or settings.GPT_IMAGE_MODEL)
 

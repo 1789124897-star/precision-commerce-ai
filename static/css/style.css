@@ -79,7 +79,7 @@ body {
   animation: fadeUp 0.35s ease;
 }
 .card-sm { padding: 14px 18px; }
-.card:focus-within { }
+.card:focus-within { box-shadow: 0 0 0 1.5px var(--text); }
 .card-title {
   font-size: 17px; font-weight: 700; margin-bottom: 14px;
   display: flex; align-items: center; gap: 8px;
