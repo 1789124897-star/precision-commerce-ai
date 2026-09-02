@@ -8,8 +8,8 @@ from app.core.paths import to_output_url
 from app.models import Video
 from app.models.task import STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
-from app.services.premium_composer import PremiumVideoComposer
-from app.services.quick_composer import QuickVideoComposer
+from app.services.premium_video_composer import PremiumVideoComposer
+from app.services.quick_video_composer import QuickVideoComposer
 from app.services.shot_service import ShotService
 
 logger = logging.getLogger(__name__)

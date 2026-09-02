@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.exceptions import AppException
 from app.core.paths import IMAGE_DIR, from_output_url
 from app.core.utils import image_to_data_url
-from app.services.ai_client import AIClient
+from app.services.ai_gateway import AIGateway
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class ImageGenService:
     """AI 生图服务"""
 
     def __init__(self) -> None:
-        self.ai = AIClient()
+        self.ai = AIGateway()
 
     async def run(
         self,

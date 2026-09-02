@@ -6,7 +6,7 @@ from app.core.database import SyncSession
 from app.core.exceptions import AppException
 from app.models.task import STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
-from app.services.tts_service import TTSEngine
+from app.services.tts_engine import TTSEngine
 
 logger = logging.getLogger(__name__)
 

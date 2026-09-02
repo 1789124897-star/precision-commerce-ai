@@ -7,7 +7,7 @@ from app.core.exceptions import AppException
 from app.models import Analysis
 from app.models.task import STATUS_SUCCESS
 from app.repositories.task_repo import TaskRepo
-from app.services.analysis import AnalysisService
+from app.services.analysis_service import AnalysisService
 
 logger = logging.getLogger(__name__)
 

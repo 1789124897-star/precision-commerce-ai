@@ -12,7 +12,7 @@ from app.llm.factory import create_image_client, create_multimodal_client, creat
 logger = logging.getLogger(__name__)
 
 
-class AIClient:
+class AIGateway:
     """LLM 统一入口（文本 / 多模态 / 生图）。
 
     视频生成 → ShotService / QuickVideoComposer / PremiumVideoComposer

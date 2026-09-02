@@ -5,7 +5,7 @@ import time
 from typing import Any, Optional
 
 from app.core.utils import image_to_data_url
-from app.services.ai_client import AIClient
+from app.services.ai_gateway import AIGateway
 from app.services.prompts import STRATEGY_TYPES, build_analysis_prompt, build_strategy_prompt
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ class AnalysisService:
     """产品分析 + 策略生成服务"""
 
     def __init__(self) -> None:
-        self.ai = AIClient()
+        self.ai = AIGateway()
 
     async def run(
         self,

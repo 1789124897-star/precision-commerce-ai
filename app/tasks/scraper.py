@@ -6,7 +6,7 @@ from app.core.database import SyncSession
 from app.core.exceptions import AppException
 from app.models import Product
 from app.repositories.task_repo import TaskRepo
-from app.services.scraper import ImageScraper
+from app.services.image_scraper import ImageScraper
 
 logger = logging.getLogger(__name__)
 

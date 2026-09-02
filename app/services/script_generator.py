@@ -6,7 +6,7 @@ from typing import Any
 from app.core.exceptions import AppException
 from app.core.paths import SCRIPTS_DIR
 from app.core.utils import save_json
-from app.services.ai_client import AIClient
+from app.services.ai_gateway import AIGateway
 from app.services.prompts import build_product_script_prompt
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ class ScriptGenerator:
     """口播脚本生成 — DeepSeek JSON 模式 + 段数强制对齐"""
 
     def __init__(self) -> None:
-        self.ai = AIClient()
+        self.ai = AIGateway()
 
     async def generate(
         self,

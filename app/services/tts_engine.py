@@ -15,7 +15,7 @@ from edge_tts.exceptions import EdgeTTSException
 from app.core.exceptions import AppException
 from app.core.paths import AUDIO_DIR, to_output_url
 from app.core.srt_utils import seconds_to_srt
-from app.services.ai_client import AIClient
+from app.services.ai_gateway import AIGateway
 from app.services.shot_grouper import ShotGroup, ShotGrouper
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ async def _fill_scene_prompts(groups: list[ShotGroup]) -> None:
     """用 AI 给每组镜头填场景描述，失败不阻断主流程"""
     voiceovers = [s.voiceover for s in groups]
     try:
-        scene_prompts = await AIClient().generate_shot_scenes(voiceovers=voiceovers)
+        scene_prompts = await AIGateway().generate_shot_scenes(voiceovers=voiceovers)
         for shot, sp in zip(groups, scene_prompts):
             shot.scene_prompt = sp.get("zh", "")
             shot.scene_prompt_en = sp.get("en", "")
