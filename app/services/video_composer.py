@@ -13,8 +13,10 @@ from app.core.srt_utils import srt_to_seconds
 
 logger = logging.getLogger(__name__)
 
-# 中文字体路径
+# 中文字体路径：首选霞鹜文楷（字幕观感），缺失时回退中易黑体
 _FONT_DIRS = [
+    Path(__file__).resolve().parent.parent.parent / "static" / "LXGWWenKai-Regular.ttf",
+    Path("static/LXGWWenKai-Regular.ttf"),
     Path(__file__).resolve().parent.parent.parent / "static" / "Z-SIMHEI.TTF",
     Path("static/Z-SIMHEI.TTF"),
 ]
