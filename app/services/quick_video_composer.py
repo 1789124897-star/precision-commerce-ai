@@ -31,14 +31,13 @@ class QuickVideoComposer(VideoComposerBase):
         audio_path: str,
         srt_path: str,
         task_id: str,
-        aspect_ratio: str = "",
-        resolution: str = "",
+        resolution: str,
+        aspect_ratio: str = "9:16",
         transition: str = "fade",
         quality_check: bool = True,
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> dict:
-        aspect_ratio = aspect_ratio or "9:16"
-        resolution = resolution or "720p"
+
         def report(pct, stage):
             logger.info(f"[{pct*100:.0f}%] {stage}")
             if on_progress:
@@ -48,7 +47,7 @@ class QuickVideoComposer(VideoComposerBase):
         w, h = self._parse_aspect(aspect_ratio, resolution)
         report(0.0, f"加载 {len(images)} 张图片...")
 
-        # 2. 加载图片（跳过不存在的，全部无效则报错）
+        # 2. 加载图片
         image_paths = []
         for url in images:
             local = from_output_url(url)

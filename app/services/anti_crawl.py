@@ -1,6 +1,7 @@
 """1688 反爬工具集 —— 随机延迟 + 指数退避重试 + Cookie 持久化。"""
 import json
 import logging
+import os
 import random
 import time
 
