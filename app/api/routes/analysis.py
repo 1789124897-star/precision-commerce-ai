@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.utils import save_upload
+from app.models.task import TASK_TYPE_ANALYSIS, TASK_TYPE_STRATEGY
 from app.schemas.analysis import AnalysisSubmitRequest, StrategyRequest
 from app.services.task_service import TaskService
 from app.tasks.analysis import analyze_product_task
@@ -20,7 +21,7 @@ async def submit_analysis(
     extra: str = Form(""),
     images: list[UploadFile] = File(default_factory=list),
     custom_prompt: str = Form(""),
-    model: str = Form(""),  # 多模态模型名：gpt-* / kimi-* / doubao-*
+    model: str = Form(""), 
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     body = AnalysisSubmitRequest(
@@ -35,7 +36,7 @@ async def submit_analysis(
 
     task = await TaskService.create_and_dispatch(
         db,
-        task_type="analysis",
+        task_type=TASK_TYPE_ANALYSIS,
         request_json={**body.model_dump(), "image_paths": image_paths},
         celery_task=analyze_product_task,
     )
@@ -46,7 +47,7 @@ async def submit_analysis(
 async def do_submit_strategies(body: StrategyRequest, db: AsyncSession = Depends(get_db)) -> dict:
     task = await TaskService.create_and_dispatch(
         db,
-        task_type="strategy",
+        task_type=TASK_TYPE_STRATEGY,
         request_json={"analysis": body.analysis, "system_prompt": body.system_prompt, "model": body.model},
         celery_task=generate_strategies_task,
         parent_task_id=body.parent_task_id,

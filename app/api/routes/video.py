@@ -4,6 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.utils import save_upload
+from app.models.task import (
+    TASK_TYPE_SCRIPT_GEN,
+    TASK_TYPE_SHOT_GEN,
+    TASK_TYPE_TTS,
+    TASK_TYPE_VIDEO_COMPOSE,
+)
 from app.schemas.video import (
     ComposePremiumRequest,
     ComposeVideoRequest,
@@ -24,7 +30,7 @@ async def generate_script(body: GenerateScriptRequest, db: AsyncSession = Depend
     """AI 生成口播脚本，按目标段数拆分。"""
     task = await TaskService.create_and_dispatch(
         db,
-        task_type="script_gen",
+        task_type=TASK_TYPE_SCRIPT_GEN,
         request_json={
             "content": body.content,
             "target_segments": body.segments,
@@ -40,7 +46,7 @@ async def generate_tts(body: GenerateTTSRequest, db: AsyncSession = Depends(get_
     """TTS 配音：将脚本文本转为音频 + SRT 字幕。"""
     task = await TaskService.create_and_dispatch(
         db,
-        task_type="tts",
+        task_type=TASK_TYPE_TTS,
         request_json={
             "text": body.text,
             "voice": body.voice,
@@ -75,7 +81,7 @@ async def compose_video(body: ComposeVideoRequest, db: AsyncSession = Depends(ge
     """快速模式合成。"""
     task = await TaskService.create_and_dispatch(
         db,
-        task_type="video_compose",
+        task_type=TASK_TYPE_VIDEO_COMPOSE,
         request_json={
             "images": body.images,
             "audio_path": body.audio_path,
@@ -96,7 +102,7 @@ async def compose_premium(body: ComposePremiumRequest, db: AsyncSession = Depend
     """精铺模式合成。"""
     task = await TaskService.create_and_dispatch(
         db,
-        task_type="video_compose",
+        task_type=TASK_TYPE_VIDEO_COMPOSE,
         request_json={
             "shots": [s.model_dump() for s in body.shots],
             "audio_path": body.audio_path,
@@ -113,7 +119,7 @@ async def generate_shot(body: GenerateShotRequest, db: AsyncSession = Depends(ge
     """AI 分镜生成。"""
     task = await TaskService.create_and_dispatch(
         db,
-        task_type="shot_gen",
+        task_type=TASK_TYPE_SHOT_GEN,
         request_json={
             "first_frame_url": body.first_frame_url,
             "last_frame_url": body.last_frame_url,

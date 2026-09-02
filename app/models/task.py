@@ -9,16 +9,33 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
-TASK_TYPES = ["scrape", "analysis", "strategy", "image_gen", "script_gen", "tts", "video_compose", "shot_gen"]
-TASK_STATUSES = ["PENDING", "RUNNING", "SUCCESS", "FAILURE"]
+TASK_TYPE_SCRAPE = "scrape"
+TASK_TYPE_ANALYSIS = "analysis"
+TASK_TYPE_STRATEGY = "strategy"
+TASK_TYPE_IMAGE_GEN = "image_gen"
+TASK_TYPE_SCRIPT_GEN = "script_gen"
+TASK_TYPE_TTS = "tts"
+TASK_TYPE_VIDEO_COMPOSE = "video_compose"
+TASK_TYPE_SHOT_GEN = "shot_gen"
 
-# 状态常量
+TASK_TYPES = [
+    TASK_TYPE_SCRAPE,
+    TASK_TYPE_ANALYSIS,
+    TASK_TYPE_STRATEGY,
+    TASK_TYPE_IMAGE_GEN,
+    TASK_TYPE_SCRIPT_GEN,
+    TASK_TYPE_TTS,
+    TASK_TYPE_VIDEO_COMPOSE,
+    TASK_TYPE_SHOT_GEN,
+]
+
 STATUS_PENDING = "PENDING"
 STATUS_RUNNING = "RUNNING"
 STATUS_SUCCESS = "SUCCESS"
 STATUS_FAILURE = "FAILURE"
-# 仅作为 Celery 任务返回值标记（任务记录不存在），不属于 TASK_STATUSES 数据库状态
 STATUS_NOT_FOUND = "NOT_FOUND"
+
+TASK_STATUSES = [STATUS_PENDING, STATUS_RUNNING, STATUS_SUCCESS, STATUS_FAILURE]
 
 
 def gen_task_id() -> str:

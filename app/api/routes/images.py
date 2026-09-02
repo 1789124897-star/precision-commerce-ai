@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.utils import save_upload
+from app.models.task import TASK_TYPE_IMAGE_GEN
 from app.services.task_service import TaskService
 from app.tasks.image_gen import generate_images_task
 
@@ -22,7 +23,7 @@ async def submit_image(
 
     task = await TaskService.create_and_dispatch(
         db,
-        task_type="image_gen",
+        task_type=TASK_TYPE_IMAGE_GEN,
         request_json={
             "prompts": prompts,
             "ref_image_paths": ref_image_paths,
