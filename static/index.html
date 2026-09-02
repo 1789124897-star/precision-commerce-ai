@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>精铺AI工作台</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<link rel="stylesheet" href="/static/css/style.css?v=20260808">
+<link rel="stylesheet" href="/static/css/style.css?v=20260902">
 <link rel="stylesheet" href="/static/theme-warm.css?v=20260724">
 </head>
 <body>
@@ -214,7 +214,6 @@
     <!-- 口播脚本 -->
     <div class="card">
       <div class="card-title"><span class="icon">📝</span>口播脚本</div>
-      <input type="hidden" id="vidHook" value="">
       <div class="vid-row" style="align-items:flex-end;">
         <div>
           <div class="vid-lbl">分段数量</div>
@@ -277,7 +276,6 @@
         </div>
         <div id="vidTtsShotsImport" style="margin-top:6px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;gap:8px;">
           <span id="vidTtsShotsCount" style="font-size:12px;color:var(--text2);">配音完成后可导入镜头</span>
-          <button class="btn btn-ghost btn-sm" onclick="importTtsShots()" style="margin-left:8px;font-size:12px;">📥 导入镜头到分镜</button>
         </div>
       </div>
     </div>
@@ -286,12 +284,14 @@
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div class="card-title" style="margin:0;"><span class="icon">🎬</span>视频合成</div>
-        <div id="vidAIModelRow" style="flex-shrink:0;">
+        <div id="vidAIModelRow" style="flex-shrink:0;display:flex;align-items:center;gap:6px;">
           <label style="margin:0 6px 0 0;font-size:12px;color:var(--text2);">视频 AI 模型</label>
           <select id="vidAIModel" onchange="vidAIModelChange()" style="height:32px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--bg);">
             <option value="doubao-seedance-1-5-pro-251215">Seedance 1.5 Pro</option>
             <option value="doubao-seedance-2-0-mini-260615">Seedance 2.0 Mini</option>
           </select>
+          <button class="btn btn-ghost btn-sm" onclick="importTtsShots()" style="font-size:11px;">📥 导入镜头到分镜</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearStoryboard()" id="btnClearShots" style="font-size:11px;display:none;">🗑️ 清空镜头</button>
         </div>
       </div>
 
@@ -326,10 +326,6 @@
 
       <!-- 动态参数区（快速：转场风格 / 精品：分镜编辑器） -->
       <div id="vidComposeParams"></div>
-
-      <!-- 精品模式：分镜进度 -->
-      <div id="vidPremiumZone" style="display:none;">
-      </div>
 
       <!-- 快速模式素材上传区（图片 + 音频 + 字幕） -->
       <div id="vidUploadSection" style="margin-top:10px;"></div>
@@ -428,6 +424,6 @@
   </div>
 </div>
 
-<script src="/static/js/app.js?v=20260808"></script>
+<script src="/static/js/app.js?v=20260902"></script>
 </body>
 </html>
