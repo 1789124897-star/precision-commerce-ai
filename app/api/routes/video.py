@@ -27,7 +27,7 @@ router = APIRouter(prefix="/video", tags=["Video"])
 
 @router.post("/generate-script")
 async def generate_script(body: GenerateScriptRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    """AI 生成口播脚本，按目标段数拆分。"""
+    """AI 口播脚本。"""
     task = await TaskService.create_and_dispatch(
         db,
         task_type=TASK_TYPE_SCRIPT_GEN,

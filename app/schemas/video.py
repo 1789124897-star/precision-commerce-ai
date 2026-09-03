@@ -5,7 +5,6 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-# 导出分辨率白名单：与 services/video_composer.py 的短边映射 key 保持一致
 VideoResolution = Literal["480p", "720p", "1080p"]
 
 
