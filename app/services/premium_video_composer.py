@@ -119,7 +119,7 @@ class PremiumVideoComposer(VideoComposerBase):
 
             report(1.0, "合成完成")
         finally:
-            if has_audio:
+            if audio is not None:
                 audio.close()
             video.close()
             self._cleanup_temp_files()

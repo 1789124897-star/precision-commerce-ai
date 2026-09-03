@@ -1,9 +1,4 @@
-"""本地图片公网化 — cloudflared 快速隧道
-
-参照 jlc-global-ozon-auto-listing 的 CloudflareImageTunnel 简化移植：
-本地起静态 HTTP 服务 → cloudflared quick tunnel → 公网 URL。
-懒启动 + 全局复用 + 失效自动重建，Seedance 提交前自动转换本地路径。
-"""
+"""本地图片公网化 — cloudflared 快速隧道。"""
 import http.server
 import logging
 import os
@@ -75,7 +70,10 @@ class ImageHost:
     def start(self) -> str:
         """启动隧道，返回公网根 URL；已运行时直接复用。"""
         if self.is_alive():
-            return self.public_url
+            url = self.public_url
+            if url is None:
+                raise ImageTunnelError("隧道存活但公网 URL 未就绪")
+            return url
         self.stop()
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
@@ -120,9 +118,10 @@ class ImageHost:
             if self.process.poll() is not None:
                 raise ImageTunnelError("cloudflared 在创建隧道前已退出")
             if url_ready.is_set() and tunnel_ready.is_set():
-                self.public_url = found_url["url"]
-                logger.info(f"图床隧道已就绪: {self.public_url} (服务 {self.directory})")
-                return self.public_url
+                url = found_url["url"]
+                self.public_url = url
+                logger.info(f"图床隧道已就绪: {url} (服务 {self.directory})")
+                return url
             time.sleep(0.2)
         raise ImageTunnelError("等待 cloudflared 隧道连接超时 (45s)")
 
@@ -172,10 +171,10 @@ class ImageHost:
         local = Path(value)
         if local.is_absolute() and local.is_file():
             try:
-                rel = local.relative_to(self.directory)
+                rel_path = local.relative_to(self.directory)
             except ValueError:
                 raise ImageTunnelError(f"图片不在图床目录内: {local}")
-            return f"{self.start()}/{urllib.parse.quote(str(rel).replace(os.sep, '/'), safe='/')}"
+            return f"{self.start()}/{urllib.parse.quote(str(rel_path).replace(os.sep, '/'), safe='/')}"
         return value
 
 

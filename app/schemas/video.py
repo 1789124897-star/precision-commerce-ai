@@ -4,7 +4,6 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-
 VideoResolution = Literal["480p", "720p", "1080p"]
 
 

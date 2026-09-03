@@ -80,8 +80,10 @@ class ApimartSeedanceClient(VideoClientBase):
             raise AppException(f"APIMart 提交失败 HTTP {e.response.status_code}: {body[:120]}", 502) from e
 
         data = resp_body.get("data") or {}
-        task_id = data[0].get("task_id") if isinstance(data, list) and data else data.get("task_id")
-        if not task_id:
+        if isinstance(data, list):
+            data = data[0] if data else {}
+        task_id = data.get("task_id") if isinstance(data, dict) else None
+        if not isinstance(task_id, str) or not task_id:
             logger.error(f"APIMart 响应无 task_id: {resp_body}")
             raise AppException("APIMart 响应缺少 task_id", 502)
         logger.info(f"APIMart 任务已提交: {task_id}")
@@ -125,7 +127,7 @@ class ApimartSeedanceClient(VideoClientBase):
                 video_url = raw[0] if isinstance(raw, list) else raw
                 if video_url:
                     logger.info(f"APIMart 任务完成: {task_id} → {video_url}")
-                    return video_url
+                    return str(video_url)
                 logger.warning(f"APIMart 已完成但无 video_url: {json.dumps(data, ensure_ascii=False)[:300]}")
                 raise AppException("APIMart 任务完成但未返回视频 URL", 502)
 

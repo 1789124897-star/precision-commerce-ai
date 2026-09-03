@@ -83,8 +83,8 @@ class SeedanceService(VideoClientBase):
             logger.error(f"Seedance 提交失败 HTTP {e.response.status_code}: {body}")
             raise AppException(f"Seedance 提交失败 HTTP {e.response.status_code}: {body[:120]}", 502) from e
 
-        task_id: str = resp_body.get("id") or resp_body.get("taskId") or resp_body.get("task_id")
-        if not task_id:
+        task_id = resp_body.get("id") or resp_body.get("taskId") or resp_body.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
             logger.error(f"Seedance 响应无 task_id: {resp_body}")
             raise AppException("Seedance 响应缺少 task_id", 502)
         logger.info(f"Seedance 任务已提交: {task_id}")

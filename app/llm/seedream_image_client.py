@@ -55,6 +55,7 @@ class SeedreamImageClient(BaseImageClient):
         elapsed = time.monotonic() - t0
         logger.info("Seedream 生图完成 耗时=%.1fs", elapsed)
         try:
-            return data["data"][0]["url"]
+            url = data["data"][0]["url"]
+            return str(url)
         except (KeyError, IndexError, TypeError) as e:
             raise AppException(f"生图响应缺少 url: {str(data)[:200]}", 502) from e
