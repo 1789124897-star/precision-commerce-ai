@@ -62,7 +62,7 @@ services:
     volumes:
       - ./app:/app/app
       - ./output:/app/output
-    command: celery -A app.core.celery_app worker --loglevel=info -c 4
+    command: celery -A app.core.celery_app worker --loglevel=info -P solo
 
   celery_beat:
     build: .
