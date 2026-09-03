@@ -14,7 +14,7 @@ from app.llm.http import post_with_retry
 
 logger = logging.getLogger(__name__)
 
-# 前端尺寸 → prompt 画幅描述
+# 前端尺寸 
 _ASPECT_HINT = {
     "2048x2048": "1:1 方形构图",
     "1920x1920": "1:1 方形构图",
@@ -39,14 +39,12 @@ def _data_url_to_file(data_url: str) -> tuple[str, bytes, str]:
 
 
 class GptImageClient(BaseImageClient):
-    """GPT 生图客户端——提示词 + 参考图 → 图片 URL。"""
+    """GPT 生图客户端"""
 
     def __init__(self, model: Optional[str] = None) -> None:
-        self._model = model or settings.GPT_IMAGE_MODEL
+        self._model = model or "gpt-image-2"
         if not settings.GPT_IMAGE_URL:
             raise AppException("未配置 GPT_IMAGE_URL，请在 .env 中设置")
-        if not self._model:
-            raise AppException("未配置 GPT_IMAGE_MODEL，请在 .env 中设置")
         if not settings.GPT_API_KEY:
             raise AppException("未配置 GPT_API_KEY，请在 .env 中设置")
 
@@ -57,10 +55,7 @@ class GptImageClient(BaseImageClient):
         size: str,
         ref_image_data_urls: list[str],
     ) -> str:
-        """单张生图，返回图片 URL（远程 URL 或本地 /output 路径）。
-
-        有参考图时走 edits 接口（multipart image[]），否则走 generations 接口。
-        """
+        """单张生图，参考图时走 edits 接口（multipart image[]），否则走 generations 接口。"""
         hint = _ASPECT_HINT.get(size)
         if hint:
             prompt = f"{prompt}。{hint}"

@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 import app.models as _models  # noqa: F401 注册 ORM 模型
 from alembic import command
@@ -57,6 +58,16 @@ async def handle_app_exception(_req: Request, exc: AppException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"data": None, "message": exc.message},
+    )
+
+
+@app.exception_handler(ValidationError)
+async def handle_validation_error(_req: Request, exc: ValidationError):
+    first = exc.errors()[0]
+    loc = ".".join(str(x) for x in first["loc"])
+    return JSONResponse(
+        status_code=422,
+        content={"data": None, "message": f"参数校验失败: {loc} {first['msg']}"},
     )
 
 

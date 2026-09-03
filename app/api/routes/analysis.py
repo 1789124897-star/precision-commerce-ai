@@ -21,7 +21,7 @@ async def submit_analysis(
     extra: str = Form(""),
     images: list[UploadFile] = File(default_factory=list),
     custom_prompt: str = Form(""),
-    model: str = Form(""), 
+    model: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     body = AnalysisSubmitRequest(
@@ -52,7 +52,10 @@ async def submit_analysis(
 
 
 @router.post("/strategies")
-async def do_submit_strategies(body: StrategyRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def do_submit_strategies(
+    body: StrategyRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     task = await TaskService.create_and_dispatch(
         db,
         task_type=TASK_TYPE_STRATEGY,

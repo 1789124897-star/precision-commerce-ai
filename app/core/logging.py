@@ -27,7 +27,7 @@ def setup_logging() -> None:
 
     fmt = logging.Formatter(LOG_FMT, datefmt="%m-%d %H:%M:%S")
 
-    # 1. 控制台：全部 INFO+，开发直观
+    # 1. 控制台：全部 INFO+
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     console.setFormatter(fmt)
@@ -37,7 +37,7 @@ def setup_logging() -> None:
     app_fh.setLevel(logging.INFO)
     app_fh.setFormatter(fmt)
 
-    # 3. error.log：只记 ERROR+，出问题第一眼看这
+    # 3. error.log：只记 ERROR+
     err_fh = logging.FileHandler(LOG_DIR / "error.log", encoding="utf-8")
     err_fh.setLevel(logging.ERROR)
     err_fh.setFormatter(fmt)

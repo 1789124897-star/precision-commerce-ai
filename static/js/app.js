@@ -168,7 +168,7 @@ async function doAnalyze() {
     fd.append('model', document.getElementById('anaModel').value);
     S.productImageFiles.forEach(f => fd.append('images', f));
     const res = await fetch(`${A8_API}/analysis/submit`, { method:'POST', body: fd });
-    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.message || d.detail || `HTTP ${res.status}`); }
+    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(apiErrMsg(d) || `HTTP ${res.status}`); }
     const payload = await res.json();
     const taskId = payload?.data?.task_id;
     if (!taskId) throw new Error('未返回 task_id');
@@ -445,29 +445,40 @@ async function genSelectedImages(key) {
   container.innerHTML = `<div style="font-size:13px;color:var(--accent);padding:8px;">正在生成 ${total} 张图...</div>`;
 
   try {
-    const fd = new FormData();
-   if (_refImages[key] && _refImages[key].length) {
-     _refImages[key].forEach(f => fd.append('ref_images', f));
-   }
-    // 自动用深度分析上传的产品原图作为生图参考
-    if (!_refImages[key] || !_refImages[key].length) {
+    // 参考图：优先手动选的，否则自动用深度分析上传的产品原图
+    const files = [];
+    if (_refImages[key] && _refImages[key].length) files.push(..._refImages[key]);
+    else {
       const af = document.getElementById('anaFile');
-      if (af && af.files && af.files.length) {
-        Array.from(af.files).forEach(f => fd.append('ref_images', f));
-      }
+      if (af && af.files && af.files.length) files.push(...af.files);
+    }
+    let ref_image_paths = [];
+    if (files.length) {
+      const uf = new FormData();
+      files.forEach(f => uf.append('files', f));
+      const ures = await fetch(`${A8_API}/images/upload-images`, { method: 'POST', body: uf });
+      const ujson = await ures.json().catch(() => ({}));
+      if (!ures.ok) throw new Error(apiErrMsg(ujson));
+      ref_image_paths = ujson.data?.images || [];
     }
     const tagged = [
       ...selectedMI.map(s => ({...s, source: 'main'})),
       ...selectedDP.map(s => ({...s, source: 'detail'}))
     ];
-    fd.append('prompts', JSON.stringify(tagged));
     const sizeEl = document.getElementById('genSize_' + key);
-    if (sizeEl && sizeEl.value) fd.append('size', sizeEl.value);
     const modelEl = document.getElementById('dsGenModel');
-    if (modelEl && modelEl.value) fd.append('model', modelEl.value);
-
-    const res = await fetch(`${A8_API}/images/generate`, { method:'POST', body:fd });
-    if (!res.ok) throw new Error((await res.json().catch(()=>({})).message || `HTTP ${res.status}`));
+    const reqBody = {
+      prompts: tagged,
+      size: sizeEl && sizeEl.value ? sizeEl.value : undefined,
+      model: modelEl && modelEl.value ? modelEl.value : undefined,
+      ref_image_paths
+    };
+    const res = await fetch(`${A8_API}/images/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reqBody)
+    });
+    if (!res.ok) throw new Error(apiErrMsg(await res.json().catch(() => ({}))));
     const payload = await res.json();
     const taskId = payload?.data?.task_id;
     poll8000(taskId, (result) => {
@@ -1547,26 +1558,33 @@ function removeIgRef(index) {
 
 async function doImageGen() {
   const raw = document.getElementById('igPrompts').value.trim();
-  if (!raw) { showS('igStatus', 'error', '请先输入至少一条提示词'); return; }
-  const prompts = raw.split('\n').map(s => s.trim()).filter(Boolean);
-  if (!prompts.length) { showS('igStatus', 'error', '请先输入至少一条提示词'); return; }
+  if (!raw) { showS('igStatus', 'error', '请输入提示词'); return; }
 
   const size = document.getElementById('igSize').value;
   const model = document.getElementById('igModel').value.trim() || 'gpt-image-2';
   const btn = document.getElementById('btnImageGen');
   btn.disabled = true; btn.textContent = '⏳ 生成中...';
-  showS('igStatus', 'info', `正在生成 ${prompts.length} 张图片...`);
+  showS('igStatus', 'info', '正在生成图片...');
 
-  const fd = new FormData();
-  const specs = prompts.map((p, i) => ({position: i + 1, prompt: p, source: "", type: "standalone"}));
-  fd.append('prompts', JSON.stringify(specs));
-  fd.append('size', size);
-  fd.append('model', model);
-  for (const f of igRefFiles) fd.append('ref_images', f);
-  console.log('[AI生图] model:', model, '参考图数量:', igRefFiles.length);
+  const specs = [{ position: 1, prompt: raw, source: "", type: "standalone" }];
 
   try {
-    const res = await fetch('/api/v1/images/generate', { method: 'POST', body: fd });
+    let ref_image_paths = [];
+    if (igRefFiles.length) {
+      const uf = new FormData();
+      igRefFiles.forEach(f => uf.append('files', f));
+      const ures = await fetch(`${A8_API}/images/upload-images`, { method: 'POST', body: uf });
+      const ujson = await ures.json().catch(() => ({}));
+      if (!ures.ok) throw new Error(apiErrMsg(ujson));
+      ref_image_paths = ujson.data?.images || [];
+    }
+    console.log('[AI生图] model:', model, '参考图数量:', ref_image_paths.length);
+
+    const res = await fetch(`${A8_API}/images/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompts: specs, size, model, ref_image_paths })
+    });
     const json = await res.json();
     if (!res.ok) throw new Error(apiErrMsg(json));
     pollImageTask(json.data.task_id);

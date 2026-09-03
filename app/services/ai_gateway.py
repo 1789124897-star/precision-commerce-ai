@@ -77,9 +77,7 @@ class AIGateway:
             else:
                 normalized.append({"zh": s.get("zh", "")})
         if len(normalized) != len(voiceovers):
-            raise AppException(
-                f"AI 场景描述数量不匹配: 期望 {len(voiceovers)} 组，实际 {len(normalized)} 组"
-            )
+            raise AppException(f"AI 场景描述数量不匹配: 期望 {len(voiceovers)} 组，实际 {len(normalized)} 组")
         return normalized
 
     # 图片生成
@@ -93,7 +91,7 @@ class AIGateway:
     ) -> list[dict[str, Any]]:
 
         semaphore = asyncio.Semaphore(settings.IMAGE_MAX_CONCURRENT)
-        image_client = create_image_client(model or settings.GPT_IMAGE_MODEL)
+        image_client = create_image_client(model)
 
         def _result(index: int, spec: dict[str, Any], url: str = "", error: str = "",) -> dict[str, Any]:
             return {

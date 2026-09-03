@@ -31,13 +31,6 @@ class ImageGenService:
         model: str = "",
         ref_image_paths: Optional[list[str]] = None,
     ) -> dict:
-        size = size or "2048x2048"
-        model = model or settings.GPT_IMAGE_MODEL
-        if model.startswith("gpt-"):
-            if not settings.GPT_IMAGE_URL or not settings.GPT_API_KEY:
-                raise AppException("未配置 GPT 生图 API，请在 .env 中设置 GPT_IMAGE_URL 和 GPT_API_KEY", 400)
-        elif not settings.SEEDREAM_IMAGE_URL or not settings.SEEDREAM_IMAGE_MODEL:
-            raise AppException("未配置图片生成 API，请在 .env 中设置 SEEDREAM_IMAGE_URL 和 SEEDREAM_IMAGE_MODEL", 400)
 
         ref_data_urls = [image_to_data_url(url) for url in ref_image_paths] if ref_image_paths else []
 
@@ -46,7 +39,7 @@ class ImageGenService:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        specs = json.loads(prompts)
+        specs = json.loads(prompts) if isinstance(prompts, str) else prompts
         results = await self.ai.generate_images(
             specs=specs,
             ref_image_data_urls=ref_data_urls,

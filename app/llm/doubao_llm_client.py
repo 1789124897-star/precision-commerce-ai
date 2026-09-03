@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class DoubaoClient(BaseMultimodalClient):
-    """豆包多模态客户端——图片 + 文本 → 分析报告。"""
+    """豆包多模态客户端"""
 
     def __init__(self) -> None:
         self._api_key = settings.VOLCANO_API_KEY
@@ -40,7 +40,6 @@ class DoubaoClient(BaseMultimodalClient):
         user_prompt: str,
         image_data_urls: list[str],
     ) -> str:
-        """图片 + 文本多模态分析，返回分析文本。"""
         content: list[dict[str, Any]] = []
         for url in image_data_urls:
             content.append({"type": "image_url", "image_url": {"url": url}})

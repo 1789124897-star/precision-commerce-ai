@@ -25,9 +25,9 @@ class AnalysisService:
         extra: str = "",
         custom_prompt: str = "",
         image_paths: Optional[list[str]] = None,
-        model: str = "",  # 多模态模型名：gpt-* / kimi-* / doubao-*，空用 .env
+        model: str = "",  
     ) -> dict:
-        """产品分析：图片 + 商品信息 → 分析报告。"""
+        """产品多模态分析。"""
         image_data_urls = [image_to_data_url(url) for url in image_paths] if image_paths else []
 
         user_prompt = build_analysis_prompt(name, function, price, extra, custom_prompt)

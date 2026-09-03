@@ -53,7 +53,7 @@ def create_image_client(model: str = "") -> BaseImageClient:
 
     if not model:  # 默认 gpt-image-2
         from app.llm.gpt_image_client import GptImageClient
-        return GptImageClient(model="gpt-image-2")
+        return GptImageClient()
 
     raise ValueError(f"不支持的图片模型: {model}，当前支持: gpt-image-2 / doubao-seedream-4-5-251128")
 

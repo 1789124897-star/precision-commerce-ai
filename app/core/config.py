@@ -37,7 +37,6 @@ class Settings(BaseSettings):
 
     # GPT 生图
     GPT_IMAGE_URL: str = "https://api.sudocode.chat/v1/images/generations"
-    GPT_IMAGE_MODEL: str = "gpt-image-2"
 
     # Seedance 图生视频
     SEEDANCE_VIDEO_URL: str = "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks"
